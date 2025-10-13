@@ -33,18 +33,7 @@
 /**********
  * Macros *
  **********/
-/*
-#define OCC_INTV_MASK  (OCC_INTERVAL - 1)
 
-#if OCC_INTV_SHIFT == 7
-#define bwt_occ_intv(b, k) ((b)->bwt + ((k)>>7<<4))
-#define bwt_bwt(b, k) ((b)->bwt[((k)>>7<<4) + sizeof(mb_uint_t) + (((k)&0x7f)>>4)])
-#else
-#define bwt_occ_intv(b, k) ((b)->bwt + (k)/OCC_INTERVAL * (OCC_INTERVAL/(sizeof(uint32_t)*8/2) + sizeof(mb_uint_t)/4*4)
-#define bwt_bwt(b, k) ((b)->bwt[(k)/OCC_INTERVAL * (OCC_INTERVAL/(sizeof(uint32_t)*8/2) + sizeof(mb_uint_t)/4*4) + sizeof(mb_uint_t)/4*4 + (k)%OCC_INTERVAL/16])
-#error "OCC_INTV_SHIFT MUST BE 7" // although bwt_bwt() and bwt_occ_intv() are correct, other places may be wrong
-#endif
-*/
 /* retrieve a character from the $-removed BWT string. Note that
  * bwt_t::bwt is not exactly the BWT string and therefore this macro is
  * called bwt_B0 instead of bwt_B */
@@ -175,7 +164,7 @@ void mb_bwt_rank1a(const mb_bwt_t *bwt, uint64_t k, uint64_t cnt[4])
 	}
 	--k;
 	k -= (k >= bwt->primary); // because $ is not in bwt
-	p = bwt_block(bwt, k);
+	p = bwt_block(bwt, k); // p points to the block start
 	memcpy(cnt, p, 4 * sizeof(uint64_t));
 	q = (const uint32_t*)(p + 4); // 8 32-bit integers in each block
 	end = q + ((k&0x7f) >> 4);
@@ -184,23 +173,76 @@ void mb_bwt_rank1a(const mb_bwt_t *bwt, uint64_t k, uint64_t cnt[4])
 	x += rank_aux4(bwt, tmp) - (~k&0xf);
 	cnt[0] += x&0xff, cnt[1] += x>>8&0xff, cnt[2] += x>>16&0xff, cnt[3] += x>>24;
 }
+
+void mb_bwt_rank2a(const mb_bwt_t *bwt, uint64_t k, uint64_t l, uint64_t cntk[4], uint64_t cntl[4])
+{
+	uint64_t k1 = k - 1, l1 = l - 1;
+	k1 -= (k1 >= bwt->primary);
+	l1 -= (l1 >= bwt->primary);
+	if (k1>>7 != l1>>7 || k == 0 || l == 0) {
+		mb_bwt_rank1a(bwt, k, cntk);
+		mb_bwt_rank1a(bwt, l, cntl);
+	} else {
+		const uint64_t *p;
+		const uint32_t *q, *endk, *endl;
+		uint32_t x, y, tmp;
+		k = k1, l = l1;
+		p = bwt_block(bwt, k);
+		memcpy(cntk, p, 4 * sizeof(uint64_t));
+		q = (const uint32_t*)(p + 4);
+		// prepare cntk[]
+		endk = q + ((k&0x7f) >> 4);
+		endl = q + ((l&0x7f) >> 4);
+		for (x = 0; q < endk; ++q) x += rank_aux4(bwt, *q);
+		y = x;
+		tmp = *q << ((~k&0xf) << 1);
+		x += rank_aux4(bwt, tmp) - (~k&0xf);
+		// calculate cntl[] and finalize cntk[]
+		for (; q < endl; ++q) y += rank_aux4(bwt, *q);
+		tmp = *q << ((~l&0xf) << 1);
+		y += rank_aux4(bwt, tmp) - (~l&0xf);
+		memcpy(cntl, cntk, 4 * sizeof(uint64_t));
+		cntk[0] += x&0xff; cntk[1] += x>>8&0xff; cntk[2] += x>>16&0xff; cntk[3] += x>>24;
+		cntl[0] += y&0xff; cntl[1] += y>>8&0xff; cntl[2] += y>>16&0xff; cntl[3] += y>>24;
+	}
+}
+
+/*********************
+ * Bidirectional BWT *
+ *********************/
+
+void mb_bwt_extend(const mb_bwt_t *bwt, const mb_sai_t *ik, mb_sai_t ok[4], int is_back)
+{
+	uint64_t tk[4], tl[4];
+	int i;
+	mb_bwt_rank2a(bwt, ik->x[!is_back], ik->x[!is_back] + ik->size, tk, tl);
+	for (i = 0; i != 4; ++i) {
+		ok[i].x[!is_back] = bwt->L2[i] + 1 + tk[i]; // +1 for the missing sentinel
+		ok[i].size = (tl[i] -= tk[i]);
+	}
+	ok[3].x[is_back] = ik->x[is_back] + (ik->x[!is_back] <= bwt->primary && ik->x[!is_back] + ik->size - 1 >= bwt->primary);
+	ok[2].x[is_back] = ok[3].x[is_back] + tl[3];
+	ok[1].x[is_back] = ok[2].x[is_back] + tl[2];
+	ok[0].x[is_back] = ok[1].x[is_back] + tl[1];
+}
+
 /*
 // an analogy to bwt_occ() but more efficient, requiring k <= l
-void bwt_2occ(const bwt_t *bwt, mb_uint_t k, mb_uint_t l, uint8_t c, mb_uint_t *ok, mb_uint_t *ol)
+void bwt_2occ(const bwt_t *bwt, uint64_t k, uint64_t l, uint8_t c, uint64_t *ok, uint64_t *ol)
 {
-	mb_uint_t _k, _l;
+	uint64_t _k, _l;
 	_k = (k >= bwt->primary)? k-1 : k;
 	_l = (l >= bwt->primary)? l-1 : l;
-	if (_l/OCC_INTERVAL != _k/OCC_INTERVAL || k == (mb_uint_t)(-1) || l == (mb_uint_t)(-1)) {
+	if (_l/OCC_INTERVAL != _k/OCC_INTERVAL || k == (uint64_t)(-1) || l == (uint64_t)(-1)) {
 		*ok = bwt_occ(bwt, k, c);
 		*ol = bwt_occ(bwt, l, c);
 	} else {
-		mb_uint_t m, n, i, j;
+		uint64_t m, n, i, j;
 		uint32_t *p;
 		if (k >= bwt->primary) --k;
 		if (l >= bwt->primary) --l;
-		n = ((mb_uint_t*)(p = bwt_occ_intv(bwt, k)))[c];
-		p += sizeof(mb_uint_t);
+		n = ((uint64_t*)(p = bwt_occ_intv(bwt, k)))[c];
+		p += sizeof(uint64_t);
 		// calculate *ok
 		j = k >> 5 << 5;
 		for (i = k/OCC_INTERVAL*OCC_INTERVAL; i < j; i += 32, p += 2)
@@ -219,43 +261,9 @@ void bwt_2occ(const bwt_t *bwt, mb_uint_t k, mb_uint_t l, uint8_t c, mb_uint_t *
 	}
 }
 
-// an analogy to bwt_occ4() but more efficient, requiring k <= l
-void bwt_2occ4(const bwt_t *bwt, mb_uint_t k, mb_uint_t l, mb_uint_t cntk[4], mb_uint_t cntl[4])
+int bwt_match_exact(const bwt_t *bwt, int len, const uint8_t *str, uint64_t *sa_begin, uint64_t *sa_end)
 {
-	mb_uint_t _k, _l;
-	_k = k - (k >= bwt->primary);
-	_l = l - (l >= bwt->primary);
-	if (_l>>OCC_INTV_SHIFT != _k>>OCC_INTV_SHIFT || k == (mb_uint_t)(-1) || l == (mb_uint_t)(-1)) {
-		bwt_occ4(bwt, k, cntk);
-		bwt_occ4(bwt, l, cntl);
-	} else {
-		mb_uint_t x, y;
-		uint32_t *p, tmp, *endk, *endl;
-		k -= (k >= bwt->primary); // because $ is not in bwt
-		l -= (l >= bwt->primary);
-		p = bwt_occ_intv(bwt, k);
-		memcpy(cntk, p, 4 * sizeof(mb_uint_t));
-		p += sizeof(mb_uint_t); // sizeof(mb_uint_t) = 4*(sizeof(mb_uint_t)/sizeof(uint32_t))
-		// prepare cntk[]
-		endk = p + ((k>>4) - ((k&~OCC_INTV_MASK)>>4));
-		endl = p + ((l>>4) - ((l&~OCC_INTV_MASK)>>4));
-		for (x = 0; p < endk; ++p) x += rank_aux4(bwt, *p);
-		y = x;
-		tmp = *p & ~((1U<<((~k&15)<<1)) - 1);
-		x += rank_aux4(bwt, tmp) - (~k&15);
-		// calculate cntl[] and finalize cntk[]
-		for (; p < endl; ++p) y += rank_aux4(bwt, *p);
-		tmp = *p & ~((1U<<((~l&15)<<1)) - 1);
-		y += rank_aux4(bwt, tmp) - (~l&15);
-		memcpy(cntl, cntk, 4 * sizeof(mb_uint_t));
-		cntk[0] += x&0xff; cntk[1] += x>>8&0xff; cntk[2] += x>>16&0xff; cntk[3] += x>>24;
-		cntl[0] += y&0xff; cntl[1] += y>>8&0xff; cntl[2] += y>>16&0xff; cntl[3] += y>>24;
-	}
-}
-
-int bwt_match_exact(const bwt_t *bwt, int len, const uint8_t *str, mb_uint_t *sa_begin, mb_uint_t *sa_end)
-{
-	mb_uint_t k, l, ok, ol;
+	uint64_t k, l, ok, ol;
 	int i;
 	k = 0; l = bwt->seq_len;
 	for (i = len - 1; i >= 0; --i) {
@@ -272,10 +280,10 @@ int bwt_match_exact(const bwt_t *bwt, int len, const uint8_t *str, mb_uint_t *sa
 	return l - k + 1;
 }
 
-int bwt_match_exact_alt(const bwt_t *bwt, int len, const uint8_t *str, mb_uint_t *k0, mb_uint_t *l0)
+int bwt_match_exact_alt(const bwt_t *bwt, int len, const uint8_t *str, uint64_t *k0, uint64_t *l0)
 {
 	int i;
-	mb_uint_t k, l, ok, ol;
+	uint64_t k, l, ok, ol;
 	k = *k0; l = *l0;
 	for (i = len - 1; i >= 0; --i) {
 		uint8_t c = str[i];
@@ -293,21 +301,6 @@ int bwt_match_exact_alt(const bwt_t *bwt, int len, const uint8_t *str, mb_uint_t
  * Bidirectional BWT *
  *********************/
 /*
-void bwt_extend(const bwt_t *bwt, const bwtintv_t *ik, bwtintv_t ok[4], int is_back)
-{
-	mb_uint_t tk[4], tl[4];
-	int i;
-	bwt_2occ4(bwt, ik->x[!is_back] - 1, ik->x[!is_back] - 1 + ik->x[2], tk, tl);
-	for (i = 0; i != 4; ++i) {
-		ok[i].x[!is_back] = bwt->L2[i] + 1 + tk[i];
-		ok[i].x[2] = tl[i] - tk[i];
-	}
-	ok[3].x[is_back] = ik->x[is_back] + (ik->x[!is_back] <= bwt->primary && ik->x[!is_back] + ik->x[2] - 1 >= bwt->primary);
-	ok[2].x[is_back] = ok[3].x[is_back] + ok[3].x[2];
-	ok[1].x[is_back] = ok[2].x[is_back] + ok[2].x[2];
-	ok[0].x[is_back] = ok[1].x[is_back] + ok[1].x[2];
-}
-
 static void bwt_reverse_intvs(bwtintv_v *p)
 {
 	if (p->n > 1) {
@@ -416,9 +409,9 @@ int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int m
  * Suffix array operations *
  ***************************/
 /*
-static inline mb_uint_t bwt_invPsi(const mb_bwt_t *bwt, mb_uint_t k) // compute inverse CSA
+static inline uint64_t bwt_invPsi(const mb_bwt_t *bwt, uint64_t k) // compute inverse CSA
 {
-	mb_uint_t x = k - (k > bwt->primary);
+	uint64_t x = k - (k > bwt->primary);
 	x = bwt_B0(bwt, x);
 	x = bwt->L2[x] + mb_bwt_rank11(bwt, k, x);
 	return k == bwt->primary? 0 : x;
@@ -427,7 +420,7 @@ static inline mb_uint_t bwt_invPsi(const mb_bwt_t *bwt, mb_uint_t k) // compute 
 // bwt->bwt and bwt->occ must be precalculated
 void mb_gen_sa(mb_bwt_t *bwt, uint32_t intv)
 {
-	mb_uint_t isa, sa, i, mask; // S(isa) = sa
+	uint64_t isa, sa, i, mask; // S(isa) = sa
 
 	mb_assert(intv > 0 && (intv & (intv - 1)) == 0, "SA sample interval is not a power of 2.");
 	mb_assert(bwt->bwt, "bwt_t::bwt is not initialized.");
@@ -437,7 +430,7 @@ void mb_gen_sa(mb_bwt_t *bwt, uint32_t intv)
 	bwt->sa_intv_bit = i;
 	bwt->sa_intv = intv;
 	bwt->n_sa = (bwt->seq_len + intv) >> bwt->sa_intv_bit;
-	bwt->sa = mb_calloc(mb_uint_t, bwt->n_sa);
+	bwt->sa = mb_calloc(uint64_t, bwt->n_sa);
 
 	// calculate SA value
 	isa = 0, sa = bwt->seq_len, mask = intv - 1;
@@ -447,12 +440,12 @@ void mb_gen_sa(mb_bwt_t *bwt, uint32_t intv)
 		isa = bwt_invPsi(bwt, isa);
 	}
 	if ((isa & mask) == 0) bwt->sa[isa >> bwt->sa_intv_bit] = sa;
-	bwt->sa[0] = (mb_uint_t)-1; // before this line, bwt->sa[0] = bwt->seq_len
+	bwt->sa[0] = (uint64_t)-1; // before this line, bwt->sa[0] = bwt->seq_len
 }
 
-mb_uint_t mb_bwt_sa(const mb_bwt_t *bwt, mb_uint_t k)
+uint64_t mb_bwt_sa(const mb_bwt_t *bwt, uint64_t k)
 {
-	mb_uint_t sa = 0, mask = bwt->sa_intv - 1;
+	uint64_t sa = 0, mask = bwt->sa_intv - 1;
 	while (k & mask) {
 		++sa;
 		k = bwt_invPsi(bwt, k);
@@ -469,7 +462,7 @@ mb_uint_t mb_bwt_sa(const mb_bwt_t *bwt, mb_uint_t k)
 static uint64_t fread_huge(FILE *fp, uint64_t size, void *a)
 { // Mac/Darwin has a bug when reading data longer than 2GB. This function fixes this issue by reading data in small chunks
 	const int bufsize = 0x1000000; // 16M block
-	mb_uint_t offset = 0;
+	uint64_t offset = 0;
 	while (size) {
 		int x = bufsize < size? bufsize : size;
 		if ((x = fread(a + offset, 1, x, fp)) == 0) break;
@@ -487,11 +480,11 @@ mb_bwt_t *mb_bwt_load_raw(const char *fn)
 
 	fp = fopen(fn, "rb");
 	fseek(fp, 0, SEEK_END);
-	raw_size = (ftell(fp) - sizeof(mb_uint_t) * 5) >> 2;
+	raw_size = (ftell(fp) - sizeof(uint64_t) * 5) >> 2;
 	raw = mb_calloc(uint32_t, raw_size);
 	fseek(fp, 0, SEEK_SET);
-	fread(&primary, sizeof(mb_uint_t), 1, fp);
-	fread(L2 + 1, sizeof(mb_uint_t), 4, fp);
+	fread(&primary, sizeof(uint64_t), 1, fp);
+	fread(L2 + 1, sizeof(uint64_t), 4, fp);
 	L2[0] = 0;
 	fread_huge(fp, raw_size<<2, raw);
 	fclose(fp);
@@ -505,11 +498,11 @@ void mb_bwt_dump_sa(const char *fn, const mb_bwt_t *bwt)
 	FILE *fp;
 	fp = fopen(fn, "wb");
 	mb_assert(fp, "failed to write the suffix array sample file.");
-	fwrite(&bwt->primary, sizeof(mb_uint_t), 1, fp);
-	fwrite(bwt->L2+1, sizeof(mb_uint_t), 4, fp);
-	fwrite(&bwt->sa_intv, sizeof(mb_uint_t), 1, fp);
-	fwrite(&bwt->seq_len, sizeof(mb_uint_t), 1, fp);
-	fwrite(bwt->sa + 1, sizeof(mb_uint_t), bwt->n_sa - 1, fp);
+	fwrite(&bwt->primary, sizeof(uint64_t), 1, fp);
+	fwrite(bwt->L2+1, sizeof(uint64_t), 4, fp);
+	fwrite(&bwt->sa_intv, sizeof(uint64_t), 1, fp);
+	fwrite(&bwt->seq_len, sizeof(uint64_t), 1, fp);
+	fwrite(bwt->sa + 1, sizeof(uint64_t), bwt->n_sa - 1, fp);
 	fflush(fp);
 	fclose(fp);
 }
@@ -518,21 +511,21 @@ void mb_bwt_restore_sa(const char *fn, mb_bwt_t *bwt)
 {
 	char skipped[256];
 	FILE *fp;
-	mb_uint_t primary;
+	uint64_t primary;
 
 	fp = fopen(fn, "rb");
-	fread(&primary, sizeof(mb_uint_t), 1, fp);
+	fread(&primary, sizeof(uint64_t), 1, fp);
 	mb_assert(primary == bwt->primary, "inconsistent primary.");
-	fread(skipped, sizeof(mb_uint_t), 4, fp); // skip
-	fread(&bwt->sa_intv, sizeof(mb_uint_t), 1, fp);
-	fread(&primary, sizeof(mb_uint_t), 1, fp);
+	fread(skipped, sizeof(uint64_t), 4, fp); // skip
+	fread(&bwt->sa_intv, sizeof(uint64_t), 1, fp);
+	fread(&primary, sizeof(uint64_t), 1, fp);
 	mb_assert(primary == bwt->seq_len, "inconsistent sequence length.");
 
 	bwt->n_sa = (bwt->seq_len + bwt->sa_intv) / bwt->sa_intv;
-	bwt->sa = mb_calloc(mb_uint_t, bwt->n_sa);
+	bwt->sa = mb_calloc(uint64_t, bwt->n_sa);
 	bwt->sa[0] = -1;
 
-	fread_huge(fp, sizeof(mb_uint_t) * (bwt->n_sa - 1), bwt->sa + 1);
+	fread_huge(fp, sizeof(uint64_t) * (bwt->n_sa - 1), bwt->sa + 1);
 	fclose(fp);
 }
 */

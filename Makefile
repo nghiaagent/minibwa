@@ -4,7 +4,7 @@ CFLAGS=		-std=c99 -g -Wall -O3
 CXXFLAGS=	$(CFLAGS)
 CPPFLAGS=
 INCLUDES=
-OBJS=		utils.o bwt.o
+OBJS=		utils.o kalloc.o bwt.o
 PROG=		minibwa
 LIBS=		-lpthread -lz -lm
 
@@ -34,3 +34,7 @@ depend:
 		(LC_ALL=C; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c *.cpp)
 
 # DO NOT DELETE
+
+bwt.o: utils.h bwt.h
+kalloc.o: kalloc.h
+utils.o: utils.h
