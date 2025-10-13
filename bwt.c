@@ -33,10 +33,7 @@
 /**********
  * Macros *
  **********/
-
-// requirement: (OCC_INTERVAL%16 == 0); please DO NOT change this line because some part of the code assume OCC_INTERVAL=0x80
-#define OCC_INTV_SHIFT 7
-#define OCC_INTERVAL   (1LL<<OCC_INTV_SHIFT)
+/*
 #define OCC_INTV_MASK  (OCC_INTERVAL - 1)
 
 #if OCC_INTV_SHIFT == 7
@@ -47,7 +44,7 @@
 #define bwt_bwt(b, k) ((b)->bwt[(k)/OCC_INTERVAL * (OCC_INTERVAL/(sizeof(uint32_t)*8/2) + sizeof(mb_uint_t)/4*4) + sizeof(mb_uint_t)/4*4 + (k)%OCC_INTERVAL/16])
 #error "OCC_INTV_SHIFT MUST BE 7" // although bwt_bwt() and bwt_occ_intv() are correct, other places may be wrong
 #endif
-
+*/
 /* retrieve a character from the $-removed BWT string. Note that
  * bwt_t::bwt is not exactly the BWT string and therefore this macro is
  * called bwt_B0 instead of bwt_B */
@@ -57,23 +54,9 @@
  * Basic operations *
  ********************/
 
-static inline void bwt_gen_cnt_table(mb_bwt_t *bwt)
-{
-	int i, j;
-	for (i = 0; i != 256; ++i) {
-		uint32_t x = 0;
-		for (j = 0; j != 4; ++j)
-			x |= (((i&3) == j) + ((i>>2&3) == j) + ((i>>4&3) == j) + (i>>6 == j)) << (j<<3);
-		bwt->cnt_table[i] = x;
-	}
-}
-
 mb_bwt_t *mb_bwt_init(void)
 {
-	mb_bwt_t *bwt;
-	bwt = mb_calloc(mb_bwt_t, 1);
-	bwt_gen_cnt_table(bwt);
-	return bwt;
+	return mb_calloc(mb_bwt_t, 1);
 }
 
 void mb_bwt_destroy(mb_bwt_t *bwt)
@@ -83,10 +66,77 @@ void mb_bwt_destroy(mb_bwt_t *bwt)
 	free(bwt);
 }
 
+/******************
+ * Encode raw BWT *
+ ******************/
+
+#define raw_B00(b, k) ((b)[(k)>>4]>>((~(k)&0xf)<<1)&3)
+
+mb_bwt_t *mb_bwt_init_from_raw(const uint32_t *raw, uint64_t len, uint64_t primary)
+{
+	uint64_t bwt_len, occ_len, c[4], x[4], i, k, i0;
+	mb_bwt_t *bwt;
+
+	bwt = mb_bwt_init();
+	bwt->primary = primary;
+	bwt->seq_len = len;
+	bwt_len = (len + 63) / 64 * 4;
+	occ_len = ((len + 63) / 64 + 1) * 4; // +1 for the final counts
+	bwt->bwt_size = (bwt_len + occ_len) * sizeof(uint64_t);
+	bwt->bwt = mb_calloc(uint64_t, bwt_len + occ_len);
+
+	memset(c, 0, 32);
+	for (i = k = 0; i < len; ++i) {
+		uint8_t a = raw_B00(raw, i);
+		if ((i & 0x3f) == 0) {
+			if (i > 0) {
+				memcpy(&bwt->bwt[k], x, 32);
+				k += 4;
+			}
+			memcpy(&bwt->bwt[k], c, 32);
+			k += 4;
+			memset(x, 0, 32);
+			i0 = i;
+		}
+		++c[a];
+		x[a] |= 1ULL << (i - i0);
+	}
+	// the last block
+	memcpy(&bwt->bwt[k], x, 32);
+	k += 4;
+	memcpy(&bwt->bwt[k], c, 32);
+	k += 4;
+	assert(k * sizeof(uint64_t) == bwt->bwt_size);
+	for (i = 0, bwt->L2[0] = 0; i < 4; ++i)
+		bwt->L2[i+1] = bwt->L2[i] + c[i];
+	assert(bwt->L2[4] == len);
+	return bwt;
+}
+
 /********
  * Rank *
  ********/
 
+#define bwt_block(b, k) ((b)->bwt + ((k)>>6<<3))
+
+void mb_bwt_rank1a(const mb_bwt_t *bwt, uint64_t k, uint64_t cnt[4])
+{
+	const uint64_t *p;
+	uint64_t mask;
+	int r;
+	k -= (k >= bwt->primary);
+	p = bwt_block(bwt, k);
+	memcpy(cnt, p, 32);
+	p += 4;
+	r = k & 0x3f;
+	mask = (1ULL << r) - 1;
+	cnt[0] += __builtin_popcountll(p[0] & mask);
+	cnt[1] += __builtin_popcountll(p[1] & mask);
+	cnt[2] += __builtin_popcountll(p[2] & mask);
+	cnt[3] += __builtin_popcountll(p[3] & mask);
+}
+
+/*
 static inline int rank_aux1(uint64_t y, uint8_t c)
 {
 	// reduce nucleotide counting to bits counting
@@ -145,7 +195,7 @@ void mb_bwt_rank1a(const mb_bwt_t *bwt, mb_uint_t k0, mb_uint_t cnt[4])
 	x += rank_aux4(bwt, tmp) - (~k&15);
 	cnt[0] += x&0xff; cnt[1] += x>>8&0xff; cnt[2] += x>>16&0xff; cnt[3] += x>>24;
 }
-
+*/
 /*
 // an analogy to bwt_occ() but more efficient, requiring k <= l
 void bwt_2occ(const bwt_t *bwt, mb_uint_t k, mb_uint_t l, uint8_t c, mb_uint_t *ok, mb_uint_t *ol)
@@ -377,7 +427,7 @@ int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int m
 /***************************
  * Suffix array operations *
  ***************************/
-
+/*
 static inline mb_uint_t bwt_invPsi(const mb_bwt_t *bwt, mb_uint_t k) // compute inverse CSA
 {
 	mb_uint_t x = k - (k > bwt->primary);
@@ -419,27 +469,49 @@ mb_uint_t mb_bwt_sa(const mb_bwt_t *bwt, mb_uint_t k)
 		++sa;
 		k = bwt_invPsi(bwt, k);
 	}
-	/* without setting bwt->sa[0] = -1, the following line should be
-	   changed to (sa + bwt->sa[k/bwt->sa_intv]) % (bwt->seq_len + 1) */
+	// without setting bwt->sa[0] = -1, the following line should be
+	// changed to (sa + bwt->sa[k/bwt->sa_intv]) % (bwt->seq_len + 1)
 	return sa + bwt->sa[k >> bwt->sa_intv_bit];
 }
-
+*/
 /*************************
  * Read/write BWT and SA *
  *************************/
 
-void mb_bwt_dump_bwt(const char *fn, const mb_bwt_t *bwt)
-{
-	FILE *fp;
-	fp = fopen(fn, "wb");
-	mb_assert(fp, "failed to write the BWT file.");
-	fwrite(&bwt->primary, sizeof(mb_uint_t), 1, fp);
-	fwrite(bwt->L2+1, sizeof(mb_uint_t), 4, fp);
-	fwrite(bwt->bwt, 4, bwt->bwt_size, fp);
-	fflush(fp);
-	fclose(fp);
+static uint64_t fread_huge(FILE *fp, uint64_t size, void *a)
+{ // Mac/Darwin has a bug when reading data longer than 2GB. This function fixes this issue by reading data in small chunks
+	const int bufsize = 0x1000000; // 16M block
+	mb_uint_t offset = 0;
+	while (size) {
+		int x = bufsize < size? bufsize : size;
+		if ((x = fread(a + offset, 1, x, fp)) == 0) break;
+		size -= x; offset += x;
+	}
+	return offset;
 }
 
+mb_bwt_t *mb_bwt_load_raw(const char *fn)
+{
+	mb_bwt_t *bwt;
+	uint32_t *raw;
+	uint64_t L2[5], primary, raw_size;
+	FILE *fp;
+
+	fp = fopen(fn, "rb");
+	fseek(fp, 0, SEEK_END);
+	raw_size = (ftell(fp) - sizeof(mb_uint_t) * 5) >> 2;
+	raw = mb_calloc(uint32_t, raw_size);
+	fseek(fp, 0, SEEK_SET);
+	fread(&primary, sizeof(mb_uint_t), 1, fp);
+	fread(L2 + 1, sizeof(mb_uint_t), 4, fp);
+	L2[0] = 0;
+	fread_huge(fp, raw_size<<2, raw);
+	fclose(fp);
+	bwt = mb_bwt_init_from_raw(raw, L2[4], primary);
+	free(raw);
+	return bwt;
+}
+/*
 void mb_bwt_dump_sa(const char *fn, const mb_bwt_t *bwt)
 {
 	FILE *fp;
@@ -452,18 +524,6 @@ void mb_bwt_dump_sa(const char *fn, const mb_bwt_t *bwt)
 	fwrite(bwt->sa + 1, sizeof(mb_uint_t), bwt->n_sa - 1, fp);
 	fflush(fp);
 	fclose(fp);
-}
-
-static mb_uint_t fread_huge(FILE *fp, mb_uint_t size, void *a)
-{ // Mac/Darwin has a bug when reading data longer than 2GB. This function fixes this issue by reading data in small chunks
-	const int bufsize = 0x1000000; // 16M block
-	mb_uint_t offset = 0;
-	while (size) {
-		int x = bufsize < size? bufsize : size;
-		if ((x = fread(a + offset, 1, x, fp)) == 0) break;
-		size -= x; offset += x;
-	}
-	return offset;
 }
 
 void mb_bwt_restore_sa(const char *fn, mb_bwt_t *bwt)
@@ -487,22 +547,4 @@ void mb_bwt_restore_sa(const char *fn, mb_bwt_t *bwt)
 	fread_huge(fp, sizeof(mb_uint_t) * (bwt->n_sa - 1), bwt->sa + 1);
 	fclose(fp);
 }
-
-mb_bwt_t *mb_bwt_restore_bwt(const char *fn)
-{
-	mb_bwt_t *bwt;
-	FILE *fp;
-
-	bwt = mb_bwt_init();
-	fp = fopen(fn, "rb");
-	fseek(fp, 0, SEEK_END);
-	bwt->bwt_size = (ftell(fp) - sizeof(mb_uint_t) * 5) >> 2;
-	bwt->bwt = mb_calloc(uint32_t, bwt->bwt_size);
-	fseek(fp, 0, SEEK_SET);
-	fread(&bwt->primary, sizeof(mb_uint_t), 1, fp);
-	fread(bwt->L2 + 1, sizeof(mb_uint_t), 4, fp);
-	fread_huge(fp, bwt->bwt_size<<2, bwt->bwt);
-	bwt->seq_len = bwt->L2[4];
-	fclose(fp);
-	return bwt;
-}
+*/
