@@ -37,11 +37,6 @@ int mb_verbose = 3;
  * Macros *
  **********/
 
-/* retrieve a character from the $-removed BWT string. Note that
- * bwt_t::bwt is not exactly the BWT string and therefore this macro is
- * called bwt_B0 instead of bwt_B */
-#define bwt_B0(b, k) (bwt_bwt(b, k)>>((~(k)&0xf)<<1)&3)
-
 /********************
  * Basic operations *
  ********************/
@@ -282,104 +277,14 @@ int64_t mb_bwt_smem(void *km, const mb_bwt_t *f, int64_t len, const uint8_t *q, 
 	return mem->n;
 }
 
-/*
-// an analogy to bwt_occ() but more efficient, requiring k <= l
-void bwt_2occ(const bwt_t *bwt, uint64_t k, uint64_t l, uint8_t c, uint64_t *ok, uint64_t *ol)
-{
-	uint64_t _k, _l;
-	_k = (k >= bwt->primary)? k-1 : k;
-	_l = (l >= bwt->primary)? l-1 : l;
-	if (_l/OCC_INTERVAL != _k/OCC_INTERVAL || k == (uint64_t)(-1) || l == (uint64_t)(-1)) {
-		*ok = bwt_occ(bwt, k, c);
-		*ol = bwt_occ(bwt, l, c);
-	} else {
-		uint64_t m, n, i, j;
-		uint32_t *p;
-		if (k >= bwt->primary) --k;
-		if (l >= bwt->primary) --l;
-		n = ((uint64_t*)(p = bwt_occ_intv(bwt, k)))[c];
-		p += sizeof(uint64_t);
-		// calculate *ok
-		j = k >> 5 << 5;
-		for (i = k/OCC_INTERVAL*OCC_INTERVAL; i < j; i += 32, p += 2)
-			n += rank_aux((uint64_t)p[0]<<32 | p[1], c);
-		m = n;
-		n += rank_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
-		if (c == 0) n -= ~k&31; // corrected for the masked bits
-		*ok = n;
-		// calculate *ol
-		j = l >> 5 << 5;
-		for (; i < j; i += 32, p += 2)
-			m += rank_aux((uint64_t)p[0]<<32 | p[1], c);
-		m += rank_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~l&31)<<1)) - 1), c);
-		if (c == 0) m -= ~l&31; // corrected for the masked bits
-		*ol = m;
-	}
-}
-
-int bwt_match_exact(const bwt_t *bwt, int len, const uint8_t *str, uint64_t *sa_begin, uint64_t *sa_end)
-{
-	uint64_t k, l, ok, ol;
-	int i;
-	k = 0; l = bwt->seq_len;
-	for (i = len - 1; i >= 0; --i) {
-		uint8_t c = str[i];
-		if (c > 3) return 0; // no match
-		bwt_2occ(bwt, k - 1, l, c, &ok, &ol);
-		k = bwt->L2[c] + ok + 1;
-		l = bwt->L2[c] + ol;
-		if (k > l) break; // no match
-	}
-	if (k > l) return 0; // no match
-	if (sa_begin) *sa_begin = k;
-	if (sa_end)   *sa_end = l;
-	return l - k + 1;
-}
-
-int bwt_match_exact_alt(const bwt_t *bwt, int len, const uint8_t *str, uint64_t *k0, uint64_t *l0)
-{
-	int i;
-	uint64_t k, l, ok, ol;
-	k = *k0; l = *l0;
-	for (i = len - 1; i >= 0; --i) {
-		uint8_t c = str[i];
-		if (c > 3) return 0; // there is an N here. no match
-		bwt_2occ(bwt, k - 1, l, c, &ok, &ol);
-		k = bwt->L2[c] + ok + 1;
-		l = bwt->L2[c] + ol;
-		if (k > l) return 0; // no match
-	}
-	*k0 = k; *l0 = l;
-	return l - k + 1;
-}
-
-int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_len, int max_intv, bwtintv_t *mem)
-{
-	int i, c;
-	bwtintv_t ik, ok[4];
-
-	memset(mem, 0, sizeof(bwtintv_t));
-	if (q[x] > 3) return x + 1;
-	bwt_set_intv(bwt, q[x], ik); // the initial interval of a single base
-	for (i = x + 1; i < len; ++i) { // forward search
-		if (q[i] < 4) { // an A/C/G/T base
-			c = 3 - q[i]; // complement of q[i]
-			bwt_extend(bwt, &ik, ok, 0);
-			if (ok[c].x[2] < max_intv && i - x >= min_len) {
-				*mem = ok[c];
-				mem->info = (uint64_t)x<<32 | (i + 1);
-				return i + 1;
-			}
-			ik = ok[c];
-		} else return i + 1;
-	}
-	return len;
-}
-*/
 /***************************
  * Suffix array operations *
  ***************************/
 /*
+// retrieve a character from the $-removed BWT string. Note that bwt_t::data is
+// not exactly the BWT string and therefore this macro is called bwt_B0 instead of bwt_B
+#define bwt_B0(b, k) (bwt_block(b, k)>>((~(k)&0xf)<<1)&3)
+
 static inline uint64_t bwt_invPsi(const mb_bwt_t *bwt, uint64_t k) // compute inverse CSA
 {
 	uint64_t x = k - (k > bwt->primary);
