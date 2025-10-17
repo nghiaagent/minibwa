@@ -4,8 +4,8 @@ CFLAGS=		-std=c99 -g -Wall -O3
 CXXFLAGS=	$(CFLAGS)
 CPPFLAGS=
 INCLUDES=
-OBJS=		kommon.o kalloc.o bwt.o l2bit.o QSufSort.o bwtgen.o libsais.o libsais64.o \
-			index.o
+LOBJS=		kommon.o kalloc.o bwt.o l2bit.o index.o
+AOBJS=		QSufSort.o bwtgen.o libsais.o libsais64.o index.o
 PROG=		minibwa
 LIBS=		-lpthread -lz -lm
 
@@ -28,11 +28,11 @@ endif
 
 all:$(PROG)
 
-libminibwa.a:$(OBJS)
-		$(AR) -csru $@ $(OBJS)
+libminibwa.a:$(LOBJS)
+		$(AR) -csru $@ $(LOBJS)
 
-minibwa:main.o libminibwa.a
-		$(CC) $(CFLAGS) $< -o $@ -L. -lminibwa $(LIBS)
+minibwa:main.o libminibwa.a $(AOBJS)
+		$(CC) $(CFLAGS) $< $(AOBJS) -o $@ -L. -lminibwa $(LIBS)
 
 clean:
 		rm -fr *.o a.out $(PROG) *~ *.a *.dSYM
