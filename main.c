@@ -1,10 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "bwt.h"
 #include "ketopt.h"
-#include "l2bit.h"
 #include "kommon.h"
+#include "mbpriv.h"
 
 #define MB_VERSION "0.0"
 
@@ -12,14 +11,16 @@ int main_fa2bit(int argc, char *argv[]);
 int main_raw2bwt(int argc, char *argv[]);
 int main_test(int argc, char *argv[]);
 int main_genraw(int argc, char *argv[]);
+int main_genbwt(int argc, char *argv[]);
 
 static int usage(FILE *fp)
 {
 	fprintf(fp, "Usage: minibwt <command> <arguments>\n");
 	fprintf(fp, "Commands:\n");
-	fprintf(fp, "  fa2bit     convert FASTA to the long-2-bit format\n");
+	fprintf(fp, "  fa2bit     convert FASTA to the long-2bit format\n");
 	fprintf(fp, "  genraw     build BWT from pac with the BWT-SW algorithm\n");
 	fprintf(fp, "  raw2bwt    recode bwtgen raw BWT\n");
+	fprintf(fp, "  genbwt     build BWT from long-2bit\n");
 	fprintf(fp, "  version    print the version number\n");
 	return fp == stdout? 0 : 1;
 }
@@ -32,6 +33,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "fa2bit") == 0) ret = main_fa2bit(argc-1, argv+1);
 	else if (strcmp(argv[1], "genraw") == 0) ret = main_genraw(argc-1, argv+1);
 	else if (strcmp(argv[1], "raw2bwt") == 0) ret = main_raw2bwt(argc-1, argv+1);
+	else if (strcmp(argv[1], "genbwt") == 0) ret = main_genbwt(argc-1, argv+1);
 	else if (strcmp(argv[1], "test") == 0) ret = main_test(argc-1, argv+1);
 	else if (strcmp(argv[1], "version") == 0) {
 		printf("%s\n", MB_VERSION);
@@ -108,6 +110,34 @@ int main_raw2bwt(int argc, char *argv[])
 	}
 	bwt = mb_bwt_load_raw(argv[1]);
 	mb_bwt_save(argv[2], bwt);
+	mb_bwt_destroy(bwt);
+	return 0;
+}
+
+int main_genbwt(int argc, char *argv[])
+{
+	ketopt_t o = KETOPT_INIT;
+	int c, n_thread = 1, both_strand = 1;
+	mb_bwt_t *bwt;
+	l2b_t *l2b;
+	while ((c = ketopt(&o, argc, argv, 1, "1t:", 0)) >= 0) {
+		if (c == 't') n_thread = atoi(o.arg);
+		else if (c == '1') both_strand = 0;
+	}
+	if (argc - o.ind < 2) {
+		fprintf(stderr, "Usage: minibwa genbwt [options] <in.l2b> <out.bwt>\n");
+		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "  -1          forward strand only\n");
+#ifdef LIBSAIS_OPENMP
+		fprintf(stderr, "  -t INT      number of threads\n");
+#endif
+		return 1;
+	}
+	l2b = l2b_load(argv[o.ind]);
+	kom_assert(l2b, "failed to open the input file.");
+	bwt = mb_bwt_libsais(l2b, both_strand, n_thread);
+	l2b_destroy(l2b);
+	mb_bwt_save(argv[o.ind+1], bwt);
 	mb_bwt_destroy(bwt);
 	return 0;
 }

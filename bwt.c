@@ -52,10 +52,12 @@ static uint64_t mb_bwt_data_len(uint64_t len)
 	return bwt_len + occ_len;
 }
 
-mb_bwt_t *mb_bwt_init_from_raw(const uint32_t *raw, uint64_t len, uint64_t primary)
+mb_bwt_t *mb_bwt_init_from_raw(int is_byte, const void *raw_, uint64_t len, uint64_t primary)
 {
 	uint64_t c[4], x[4], i, k;
 	mb_bwt_t *bwt;
+	const uint32_t *raw32 = is_byte? 0 : (const uint32_t*)raw_;
+	const uint8_t *raw8 = is_byte? (const uint8_t*)raw_ : 0;
 
 	bwt = mb_bwt_init();
 	bwt->primary = primary;
@@ -65,7 +67,7 @@ mb_bwt_t *mb_bwt_init_from_raw(const uint32_t *raw, uint64_t len, uint64_t prima
 
 	memset(c, 0, 32);
 	for (i = k = 0; i < len; ++i) {
-		uint8_t a = raw_B00(raw, i);
+		uint8_t a = is_byte? raw8[i]&3 : raw_B00(raw32, i);
 		if ((i & 0x7f) == 0) {
 			if (i > 0) {
 				memcpy(&bwt->data[k], x, 32);
@@ -331,7 +333,7 @@ mb_bwt_t *mb_bwt_load_raw(const char *fn)
 	L2[0] = 0;
 	read_huge(fp, raw_size<<2, raw);
 	fclose(fp);
-	bwt = mb_bwt_init_from_raw(raw, L2[4], primary);
+	bwt = mb_bwt_init_from_raw(0, raw, L2[4], primary);
 	free(raw);
 	return bwt;
 }

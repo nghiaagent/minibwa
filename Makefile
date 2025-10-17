@@ -4,13 +4,20 @@ CFLAGS=		-std=c99 -g -Wall -O3
 CXXFLAGS=	$(CFLAGS)
 CPPFLAGS=
 INCLUDES=
-OBJS=		kommon.o kalloc.o bwt.o l2bit.o QSufSort.o bwtgen.o
+OBJS=		kommon.o kalloc.o bwt.o l2bit.o QSufSort.o bwtgen.o libsais.o libsais64.o \
+			index.o
 PROG=		minibwa
 LIBS=		-lpthread -lz -lm
 
 ifneq ($(asan),)
 	CFLAGS+=-fsanitize=address
 	LIBS+=-fsanitize=address -ldl
+endif
+
+ifneq ($(omp),0)
+	CPPFLAGS=-DLIBSAIS_OPENMP
+	CFLAGS+=-fopenmp
+	LIBS+=-fopenmp
 endif
 
 .SUFFIXES:.c .cpp .o
@@ -34,3 +41,15 @@ depend:
 		(LC_ALL=C; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c *.cpp)
 
 # DO NOT DELETE
+
+QSufSort.o: QSufSort.h
+bseq.o: bseq.h kseq.h
+bwt.o: kommon.h kalloc.h bwt.h
+bwtgen.o: QSufSort.h
+index.o: bwt.h l2bit.h libsais64.h kommon.h
+kalloc.o: kalloc.h
+kommon.o: kommon.h
+l2bit.o: kommon.h l2bit.h kseq.h
+libsais.o: libsais.h
+libsais64.o: libsais.h libsais64.h
+main.o: ketopt.h kommon.h mbpriv.h l2bit.h bwt.h
