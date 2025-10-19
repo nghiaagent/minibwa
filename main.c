@@ -155,21 +155,27 @@ int main_seed(int argc, char *argv[])
 	ketopt_t o = KETOPT_INIT;
 	gzFile fp;
 	kseq_t *ks;
-	int c, min_len = 19, min_occ = 1, max_size_out = 20;
+	int c, min_len = 19, min_occ = 1, max_occ = 1, max_size_out = 20, use_sa1 = 0;
 	uint64_t *sa, m_a = 0;
 	mb_sai_t *a = 0;
 	kstring_t out = {0};
 
-	while ((c = ketopt(&o, argc, argv, 1, "l:s:w:", 0)) >= 0) {
+	while ((c = ketopt(&o, argc, argv, 1, "l:s:w:1c:", 0)) >= 0) {
 		if (c == 'l') min_len = atoi(o.arg);
 		else if (c == 's') min_occ = atoi(o.arg);
+		else if (c == 'c') max_occ = atoi(o.arg);
 		else if (c == 'w') max_size_out = atoi(o.arg);
+		else if (c == '1') use_sa1 = 1;
 	}
+	if (max_occ < min_occ) max_occ = min_occ;
 	if (argc - o.ind < 2) {
 		fprintf(stderr, "Usage: minibwa seed [options] <in.mbw> <in.fq>\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -l INT     min seed length [%d]\n", min_len);
 		fprintf(stderr, "  -s INT     min interval size [%d]\n", min_occ);
+		fprintf(stderr, "  -c INT     max interval size [%d]\n", max_occ);
+		fprintf(stderr, "  -w INT     max interval size to output coordinates [%d]\n", max_size_out);
+		fprintf(stderr, "  -1         use unbatched sa\n");
 		return 1;
 	}
 
@@ -186,7 +192,7 @@ int main_seed(int argc, char *argv[])
 		for (i = 0; i < ks->seq.l; ++i)
 			ks->seq.s[i] = kom_nt4_table[(uint8_t)ks->seq.s[i]];
 		do {
-			x = mb_bwt_smem(0, bwt, min_len, min_occ, ks->seq.l, (uint8_t*)ks->seq.s, x, &p);
+			x = mb_bwt_smem(0, bwt, min_len, min_occ, max_occ, ks->seq.l, (uint8_t*)ks->seq.s, x, &p);
 			if (p.size > 0) {
 				kom_grow(mb_sai_t, a, n_a, m_a);
 				a[n_a++] = p;
@@ -196,14 +202,14 @@ int main_seed(int argc, char *argv[])
 			kom_sprintf_lite(&out, "EM\t%ld\t%ld\t%ld", a[i].info>>32, a[i].info&0xffffffffull, a[i].size);
 			if (a[i].size <= max_size_out) {
 				int64_t j, n_sa = a[i].size;
-				#if 0
-				for (j = 0; j < a[i].size; ++j)
-					sa[j] = mb_bwt_sa(bwt, a[i].x[0] + j);
-				#else
-				for (j = 0; j < a[i].size; ++j)
-					sa[j] = a[i].x[0] + j;
-				mb_bwt_sa_batch(0, bwt, a[i].size, sa);
-				#endif
+				if (use_sa1) {
+					for (j = 0; j < a[i].size; ++j)
+						sa[j] = mb_bwt_sa(bwt, a[i].x[0] + j);
+				} else {
+					for (j = 0; j < a[i].size; ++j)
+						sa[j] = a[i].x[0] + j;
+					mb_bwt_sa_batch(0, bwt, a[i].size, sa);
+				}
 				for (j = 0; j < n_sa; ++j)
 					kom_sprintf_lite(&out, "\t%ld", sa[j]);
 			} else kom_sprintf_lite(&out, "\t*");

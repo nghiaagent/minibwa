@@ -210,11 +210,12 @@ void mb_bwt_extend(const mb_bwt_t *bwt, const mb_sai_t *ik, mb_sai_t ok[4], int 
 	ok[0].x[is_back] = ok[1].x[is_back] + tl[1];
 }
 
-int64_t mb_bwt_smem(void *km, const mb_bwt_t *f, int64_t min_len, int64_t min_occ, int64_t len, const uint8_t *q, int64_t x, mb_sai_t *p)
+int64_t mb_bwt_smem(void *km, const mb_bwt_t *f, int64_t min_len, int64_t min_occ, int64_t max_occ, int64_t len, const uint8_t *q, int64_t x, mb_sai_t *p)
 {
-	int64_t i, j, xn;
+	int64_t i, j, xn, min_occ2;
 	mb_sai_t ik, ok[4];
 
+	assert(min_occ <= max_occ);
 	assert(len <= INT32_MAX); // this can be relaxed if we define a new struct for mem
 	p->size = 0;
 	if (len - x < min_len) return len;
@@ -230,11 +231,12 @@ int64_t mb_bwt_smem(void *km, const mb_bwt_t *f, int64_t min_len, int64_t min_oc
 		ik = ok[c];
 	}
 	if (i >= x) return i + 1; // no MEM found
+	min_occ2 = ik.size < max_occ? ik.size : max_occ; // min_occ2>=min_occ; if min_occ==max_occ, min_occ2=min_occ
 	for (j = x + min_len; j < len; ++j) { // forward extension
 		int c = 3 - q[j];
 		if (q[j] > 3) break;
 		mb_bwt_extend(f, &ik, ok, 0);
-		if (ok[c].size < min_occ) break;
+		if (ok[c].size < min_occ2) break;
 		ik = ok[c];
 	}
 	*p = ik;
@@ -244,7 +246,7 @@ int64_t mb_bwt_smem(void *km, const mb_bwt_t *f, int64_t min_len, int64_t min_oc
 	for (i = j - 1; i > x; --i) { // backward extension again
 		int c = q[i];
 		mb_bwt_extend(f, &ik, ok, 1);
-		if (ok[c].size < min_occ) break;
+		if (ok[c].size < min_occ2) break;
 		ik = ok[c];
 	}
 	return i + 1;
