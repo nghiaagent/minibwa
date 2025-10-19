@@ -116,7 +116,7 @@ int main_raw2bwt(int argc, char *argv[])
 int main_genbwt(int argc, char *argv[])
 {
 	ketopt_t o = KETOPT_INIT;
-	int c, n_thread = 4, both_strand = 1, sa_bit = 5;
+	int c, n_thread = 4, both_strand = 1, sa_bit = 4;
 	mb_bwt_t *bwt;
 	l2b_t *l2b;
 	while ((c = ketopt(&o, argc, argv, 1, "1u:t:", 0)) >= 0) {
@@ -146,7 +146,7 @@ int main_genbwt(int argc, char *argv[])
 int main_gensa(int argc, char *argv[])
 {
 	mb_bwt_t *bwt;
-	int c, sa_bit = 5, is_raw = 0;
+	int c, sa_bit = 4, is_raw = 0;
 	ketopt_t o = KETOPT_INIT;
 	while ((c = ketopt(&o, argc, argv, 1, "ru:", 0)) >= 0) {
 		if (c == 'u') sa_bit = atoi(o.arg);
@@ -169,7 +169,7 @@ int main_gensa(int argc, char *argv[])
 int main_index(int argc, char *argv[])
 {
 	ketopt_t o = KETOPT_INIT;
-	int c, low_mem = 0, n_thread = 4, sa_bit = 5;
+	int c, low_mem = 0, n_thread = 4, sa_bit = 4;
 	int64_t block_size = 10000000;
 	uint64_t seed = 11;
 	char *prefix, *fn_l2b, *fn_bwt;

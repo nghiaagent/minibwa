@@ -74,14 +74,15 @@ int main_bench(int argc, char *argv[])
 	mb_bench_type_t type = MB_BENCH_2A;
 	uint64_t x = 11, cs = 1;
 	int64_t i, n = 1000000;
-	int c, print_val = 0, intv = 20;
+	int c, print_val = 0, use_single = 0, intv = 20;
 	mb_bwt_t *bwt;
 	ketopt_t o = KETOPT_INIT;
 	double t;
 
-	while ((c = ketopt(&o, argc, argv, 1, "pn:b:v:", 0)) >= 0) {
+	while ((c = ketopt(&o, argc, argv, 1, "pn:b:v:1", 0)) >= 0) {
 		if (c == 'n') n = kom_parse_num(o.arg, 0);
 		else if (c == 'p') print_val = 1;
+		else if (c == '1') use_single = 1;
 		else if (c == 'v') intv = atoi(o.arg);
 		else if (c == 'b') {
 			if (strcmp(o.arg, "2a") == 0) type = MB_BENCH_2A;
@@ -97,6 +98,7 @@ int main_bench(int argc, char *argv[])
 		fprintf(stderr, "  -n NUM         number of data points [1m]\n");
 		fprintf(stderr, "  -v INT         interval size for msa [%d]\n", intv);
 		fprintf(stderr, "  -p             print results for each data point\n");
+		fprintf(stderr, "  -1             use unbatched sa for msa\n");
 		return 1;
 	}
 
@@ -122,17 +124,17 @@ int main_bench(int argc, char *argv[])
 		for (i = 0; i < n; ++i) {
 			uint64_t j, xor = 0, k = kom_splitmix64(&x) % bwt->seq_len;
 			uint64_t l = k + intv < bwt->seq_len? k + intv : bwt->seq_len;
-			#if 0
-			for (j = k; j < l; ++j) {
-				uint64_t s = mb_bwt_sa(bwt, j);
-				xor ^= s;
+			if (use_single) {
+				for (j = k; j < l; ++j) {
+					uint64_t s = mb_bwt_sa(bwt, j);
+					xor ^= s;
+				}
+			} else {
+				uint64_t sa[intv], n_sa = l - k;
+				for (j = 0; j < n_sa; ++j) sa[j] = k + j;
+				mb_bwt_sa_batch(0, bwt, l - k, sa);
+				for (j = 0; j < n_sa; ++j) xor ^= sa[j];
 			}
-			#else
-			uint64_t sa[intv], n_sa = l - k;
-			for (j = 0; j < n_sa; ++j) sa[j] = k + j;
-			mb_bwt_sa_batch(0, bwt, l - k, sa);
-			for (j = 0; j < n_sa; ++j) xor ^= sa[j];
-			#endif
 			cs = cs * 0xbf58476d1ce4e5b9ULL ^ xor;
 			if (print_val) printf("%lld\n", xor);
 		}
