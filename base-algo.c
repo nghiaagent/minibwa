@@ -3,8 +3,32 @@
 #include "minibwa.h"
 #include "kalloc.h"
 
-static int32_t mb_bwt_seed_last(const mb_bwt_t *bwt, int32_t len, const uint8_t *q, int32_t x, int32_t min_len, int32_t max_intv, mb_sai_t *p)
+static void mb_bwt_extend_eq(const mb_bwt_t *bwt, int32_t len, const uint8_t *q, mb_sai_t *p)
 {
+	uint32_t st = p->info>>32, en = (uint32_t)p->info;
+	int32_t j, c;
+	mb_sai_t ok[4];
+	for (j = en; j < len; ++j) { // extend forwardly
+		if (q[j] > 3) break;
+		c = 3 - q[j];
+		mb_bwt_extend(bwt, p, ok, 0);
+		if (ok[c].size < p->size) break;
+		*p = ok[c];
+	}
+	en = j;
+	for (j = st - 1; j >= 0; --j) { // extend backwardly
+		if (q[j] > 3) break;
+		c = q[j];
+		mb_bwt_extend(bwt, p, ok, 1);
+		if (ok[c].size < p->size) break;
+		*p = ok[c];
+	}
+	st = j + 1;
+	p->info = (uint64_t)st<<32 | en;
+}
+
+static int32_t mb_bwt_seed_greedy(const mb_bwt_t *bwt, int32_t len, const uint8_t *q, int32_t x, int32_t min_len, int32_t max_intv, mb_sai_t *p)
+{ // inspired by PMID:21209072 but more crude
 	int32_t i, c;
 	mb_sai_t ik, ok[4];
 	memset(p, 0, sizeof(*p));
@@ -42,19 +66,13 @@ void mb_seed_intv(void *km, const mb_seedopt_t *opt, const mb_bwt_t *bwt, int32_
 	n_a0 = v->n;
 	for (i = 0; i < n_a0; ++i) {
 		uint32_t st = v->a[i].info>>32, en = (uint32_t)v->a[i].info;
-		int32_t min_len;
 		if (en - st < opt->min_len * 2 || v->a[i].size > opt->max_sub_occ)
 			continue;
 		x = st;
-		min_len = (en - st + 2) / 3;
-		if (min_len < opt->min_len) min_len = opt->min_len;
 		do {
-			#if 1
-			x = mb_bwt_seed_last(bwt, en, seq, x, opt->min_len, opt->max_sub_occ * 2, &p);
-			#else
-			x = mb_bwt_smem(bwt, en, seq, x, min_len, v->a[i].size + 1, opt->max_sub_occ * 2, &p);
-			#endif
+			x = mb_bwt_seed_greedy(bwt, en, seq, x, opt->min_len, opt->max_sub_occ * 2, &p);
 			if (p.size > v->a[i].size) {
+				mb_bwt_extend_eq(bwt, len, seq, &p);
 				Kgrow(km, mb_sai_t, v->a, v->n, v->m);
 				v->a[v->n++] = p;
 			}
