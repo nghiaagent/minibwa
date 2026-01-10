@@ -197,7 +197,7 @@ int main_seed(int argc, char *argv[])
 		for (i = 0; i < ks->seq.l; ++i)
 			ks->seq.s[i] = kom_nt4_table[(uint8_t)ks->seq.s[i]];
 		do {
-			x = mb_bwt_smem(0, bwt, min_len, min_occ, max_occ, ks->seq.l, (uint8_t*)ks->seq.s, x, &p);
+			x = mb_bwt_smem(bwt, min_len, min_occ, max_occ, ks->seq.l, (uint8_t*)ks->seq.s, x, &p);
 			if (p.size > 0) {
 				kom_grow(mb_sai_t, a, n_a, m_a);
 				a[n_a++] = p;

@@ -22,10 +22,6 @@ void mb_tbuf_destroy(mb_tbuf_t *b)
 	free(b);
 }
 
-static void mb_seed_intv(void *km, const mb_idx_t *idx, const mb_mopt_t *opt, int qlen, const uint8_t *seq)
-{
-}
-
 mb_hit_t *mb_map(const mb_idx_t *idx, int64_t qlen, const char *seq0, int32_t *n_hit, mb_tbuf_t *b, const mb_mopt_t *opt, const char *qname)
 {
 	int64_t i;
@@ -35,5 +31,6 @@ mb_hit_t *mb_map(const mb_idx_t *idx, int64_t qlen, const char *seq0, int32_t *n
 	seq = Kcalloc(km, uint8_t, qlen);
 	for (i = 0; i < qlen; ++i)
 		seq[i] = kom_nt4_table[(uint8_t)seq0[i]];
-	free(seq);
+	kfree(km, seq);
+	return 0;
 }
