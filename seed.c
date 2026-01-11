@@ -91,41 +91,40 @@ void mb_seed_intv(void *km, const mb_bwt_t *bwt, int32_t len, const uint8_t *seq
 	}
 }
 
-void mb_anchor(void *km, const mb_idx_t *idx, int32_t len, const uint8_t *seq, int32_t min_len, int32_t max_sub_occ, int32_t max_occ, mb_anchor_v *v)
+void mb_anchor(void *km, const mb_idx_t *idx, const mb_sai_v *u, int32_t max_occ, mb_anchor_v *v)
 {
 	int64_t i, i0, j, k;
-	mb_sai_v u = {0,0,0};
 	uint64_t *a;
 
 	v->n = 0;
-	mb_seed_intv(km, idx->bwt, len, seq, min_len, max_sub_occ, &u);
-	if (u.n == 0) return; // no anchors
+	if (u->n == 0) return; // no anchors
 
 	// sort by ::x[0] and then by ::size
-	radix_sort_mb_sai0(u.a, u.a + u.n);
-	for (i = 1, i0 = 0; i <= u.n; ++i) {
-		if (i == u.n || u.a[i].x[0] != u.a[i0].x[0]) {
+	if (u->n > 1) radix_sort_mb_sai0(u->a, u->a + u->n);
+	for (i = 1, i0 = 0; i <= u->n; ++i) {
+		if (i == u->n || u->a[i].x[0] != u->a[i0].x[0]) {
 			if (i - i0 > 1)
-				radix_sort_mb_sais(&u.a[i0], &u.a[i]);
+				radix_sort_mb_sais(&u->a[i0], &u->a[i]);
 			i0 = i;
 		}
 	}
 
-	for (i = 0, k = 0; i < u.n; ++i) // calculate the size of v->a
-		k += u.a[i].size < max_occ? u.a[i].size : max_occ;
+	for (i = 0, k = 0; i < u->n; ++i) // calculate the size of v->a
+		k += u->a[i].size < max_occ? u->a[i].size : max_occ;
 	Kgrow(km, mb_anchor_t, v->a, k - 1, v->m); // preallocate
 
 	a = Kmalloc(km, uint64_t, max_occ);
-	for (i = 1, i0 = 0; i <= u.n; ++i) { // a bit overkilling for short reads, but may be beneficial for long centromeric reads
-		if (i == u.n || u.a[i].x[0] != u.a[i0].x[0] || u.a[i].size != u.a[i0].size) {
-			const mb_sai_t *p = &u.a[i0];
+	for (i = 1, i0 = 0; i <= u->n; ++i) { // a bit overkilling for short reads, but may be beneficial for long centromeric reads
+		if (i == u->n || u->a[i].x[0] != u->a[i0].x[0] || u->a[i].size != u->a[i0].size) {
+			const mb_sai_t *p = &u->a[i0];
 			int32_t n = 0, step = p->size < max_occ? 1 : p->size / max_occ;
 			for (j = 0; j < p->size; j += step)
 				a[n++] = p->x[0] + j;
+			assert(n <= max_occ);
 			mb_bwt_sa_batch(km, idx->bwt, n, a);
 			for (k = 0; k < n; ++k) {
 				for (j = i0; j < i; ++j) {
-					int32_t qs = u.a[j].info>>32, qe = (int32_t)u.a[j].info;
+					int32_t qs = u->a[j].info>>32, qe = (int32_t)u->a[j].info;
 					int32_t rev, len = qe - qs;
 					int64_t tid, cst;
 					mb_anchor_t *q;
@@ -142,6 +141,5 @@ void mb_anchor(void *km, const mb_idx_t *idx, int32_t len, const uint8_t *seq, i
 			}
 		}
 	}
-	kfree(km, u.a);
 	kfree(km, a);
 }
