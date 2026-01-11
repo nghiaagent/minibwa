@@ -42,17 +42,17 @@ static inline void mb_hit_set_coor(mb_hit_t *r, int32_t qlen, const l2b_t *l2b, 
 	const mb_anchor_t *ak = &a[k];
 	const mb_anchor_t *ak_last = &a[k + r->cnt - 1];
 
-	if (ak->tid < l2b->n_ctg) {
-		r->tid = ak->tid, r->rev = 0;
-		r->ts = ak->pos - l2b->ctg[r->tid].off;
-		r->te = ak_last->pos + ak_last->len - l2b->ctg[r->tid].off;
+	if (ak->tid2 < l2b->n_ctg) {
+		r->tid = ak->tid2, r->rev = 0;
+		r->ts = ak->tpos + 1 - ak->len - l2b->ctg[r->tid].off;
+		r->te = ak_last->tpos + 1 - l2b->ctg[r->tid].off;
 	} else {
-		r->tid = 2 * l2b->n_ctg - 1 - ak->tid, r->rev = 1;
-		r->ts = l2b->tot_len * 2 - (ak_last->pos + ak_last->len) - l2b->ctg[r->tid].off;
-		r->te = l2b->tot_len * 2 - ak->pos - l2b->ctg[r->tid].off;
+		r->tid = 2 * l2b->n_ctg - 1 - ak->tid2, r->rev = 1;
+		r->ts = l2b->tot_len * 2 - (ak_last->tpos + 1) - l2b->ctg[r->tid].off;
+		r->te = l2b->tot_len * 2 - (ak->tpos + 1 - ak->len) - l2b->ctg[r->tid].off;
 	}
-	r->qs = ak->qs;
-	r->qe = ak_last->qs + ak_last->len;
+	r->qs = ak->qpos + 1 - ak->len;
+	r->qe = ak_last->qpos + 1;
 }
 
 mb_hit_t *mb_gen_hit(void *km, uint32_t hash, int qlen, const mb_idx_t *idx, int n_u, uint64_t *u, mb_anchor_t *a)
@@ -67,7 +67,7 @@ mb_hit_t *mb_gen_hit(void *km, uint32_t hash, int qlen, const mb_idx_t *idx, int
 	z = Kmalloc(km, mb128_t, n_u);
 	for (i = k = 0; i < n_u; ++i) {
 		uint32_t h;
-		h = (uint32_t)hash64((hash64(a[k].pos) + hash64(a[k].qs)) ^ hash);
+		h = (uint32_t)hash64((hash64(a[k].tpos) + hash64(a[k].qpos)) ^ hash);
 		z[i].x = u[i] ^ h; // u[i] -- higher 32 bits: chain score; lower 32 bits: number of anchors
 		z[i].y = (uint64_t)k << 32 | (int32_t)u[i];
 		k += (int32_t)u[i];

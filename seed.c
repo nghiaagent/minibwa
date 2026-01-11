@@ -11,7 +11,7 @@ KRADIX_SORT_INIT(mb_sai0, mb_sai_t, key_sai0, 8)
 #define key_sais(a) ((a).size)
 KRADIX_SORT_INIT(mb_sais, mb_sai_t, key_sais, 8)
 
-#define key_anchor(a) ((a).pos)
+#define key_anchor(a) ((a).tpos)
 KRADIX_SORT_INIT(mb_anchor, mb_anchor_t, key_anchor, 8)
 
 static void mb_bwt_extend_eq(const mb_bwt_t *bwt, int32_t len, const uint8_t *q, mb_sai_t *p)
@@ -150,14 +150,15 @@ void mb_anchor(void *km, const mb_idx_t *idx, const mb_sai_v *u, int32_t max_occ
 					if (tid < 0) continue;
 					Kgrow(km, mb_anchor_t, v->a, v->n, v->m);
 					q = &v->a[v->n++];
-					q->tid = rev? idx->l2b->n_ctg * 2 - 1 - q->tid : q->tid;
+					q->tid2 = rev? idx->l2b->n_ctg * 2 - 1 - tid : tid;
 					q->len = len;
-					q->qs = qs;
-					q->pos = a[k];
+					q->qpos = qs + len - 1;
+					q->tpos = a[k] + len - 1;
 					q->qocc = i - i0 < 1<<16? i - i0 : (1<<16) - 1;
 					q->tocc = p->size < 1<<15? p->size : (1<<15) - 1;
 				}
 			}
+			i0 = i;
 		}
 	}
 	kfree(km, a);

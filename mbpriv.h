@@ -13,10 +13,11 @@ struct mb_idx_s {
 };
 
 typedef struct {
-	int32_t tid, len;
-	int32_t qs;
-	uint16_t qocc, tocc:15, flt:1;
-	uint64_t pos;
+	int32_t tid2; // stranded target sequence ID, ranged from 0 to 2*l2b_t::n_ctg - 1
+	int32_t len; // length of the anchor
+	int32_t qpos; // the query coordinate of the last base in the anchor; the start base is qpos+1-len
+	uint16_t qocc, tocc:15, flt:1; // ignore these for now
+	uint64_t tpos; // the target coordinate of the last base in the anchor
 } mb_anchor_t;
 
 typedef struct { int64_t n, m; mb_anchor_t *a; } mb_anchor_v;
