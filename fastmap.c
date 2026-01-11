@@ -61,6 +61,7 @@ int main_fastmap(int argc, char *argv[])
 			mb_seed_intv(0, bwt, ks->seq.l, (uint8_t*)ks->seq.s, min_len, max_sub_occ, &u);
 			if (test_anchor) {
 				mb_anchor(0, idx, &u, max_anchor_occ, &v);
+				mb_anchor_sort(v.n, v.a);
 			} else {
 				for (i = 0; i < u.n; ++i) {
 					uint32_t st = u.a[i].info >> 32;

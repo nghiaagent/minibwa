@@ -15,7 +15,7 @@ struct mb_idx_s {
 typedef struct {
 	int32_t tid, len;
 	int32_t qs;
-	uint16_t tocc, qocc;
+	uint16_t qocc, tocc:15, flt:1;
 	uint64_t pos;
 } mb_anchor_t;
 
@@ -31,6 +31,7 @@ void mb_bwtgen(const char *fn_pac, const char *fn_bwt, int block_size);
 // defined in base-algo.c
 void mb_seed_intv(void *km, const mb_bwt_t *bwt, int32_t len, const uint8_t *seq, int32_t min_len, int32_t max_sub_occ, mb_sai_v *v);
 void mb_anchor(void *km, const mb_idx_t *idx, const mb_sai_v *u, int32_t max_occ, mb_anchor_v *v);
+void mb_anchor_sort(int64_t n, mb_anchor_t *a);
 
 #ifdef __cplusplus
 }

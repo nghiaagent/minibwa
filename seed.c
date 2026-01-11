@@ -11,6 +11,9 @@ KRADIX_SORT_INIT(mb_sai0, mb_sai_t, key_sai0, 8)
 #define key_sais(a) ((a).size)
 KRADIX_SORT_INIT(mb_sais, mb_sai_t, key_sais, 8)
 
+#define key_anchor(a) ((a).pos)
+KRADIX_SORT_INIT(mb_anchor, mb_anchor_t, key_anchor, 8)
+
 static void mb_bwt_extend_eq(const mb_bwt_t *bwt, int32_t len, const uint8_t *q, mb_sai_t *p)
 {
 	uint32_t st = p->info>>32, en = (uint32_t)p->info;
@@ -93,6 +96,11 @@ void mb_seed_intv(void *km, const mb_bwt_t *bwt, int32_t len, const uint8_t *seq
 	}
 }
 
+void mb_anchor_sort(int64_t n, mb_anchor_t *a) // TODO: also deduplicate here?
+{
+	radix_sort_mb_anchor(a, a + n);
+}
+
 void mb_anchor(void *km, const mb_idx_t *idx, const mb_sai_v *u, int32_t max_occ, mb_anchor_v *v)
 {
 	int64_t i, i0, j, k;
@@ -146,8 +154,8 @@ void mb_anchor(void *km, const mb_idx_t *idx, const mb_sai_v *u, int32_t max_occ
 					q->len = len;
 					q->qs = qs;
 					q->pos = a[k];
-					q->qocc = i - i0 < UINT16_MAX? i - i0 : UINT16_MAX;
-					q->tocc = p->size < UINT16_MAX? p->size : UINT16_MAX;
+					q->qocc = i - i0 < 1<<16? i - i0 : (1<<16) - 1;
+					q->tocc = p->size < 1<<15? p->size : (1<<15) - 1;
 				}
 			}
 		}
