@@ -1,4 +1,5 @@
 #include <string.h>
+#include <assert.h>
 #include <stdio.h>
 #include "mbpriv.h"
 #include "kalloc.h"
@@ -118,9 +119,17 @@ void mb_anchor(void *km, const mb_idx_t *idx, const mb_sai_v *u, int32_t max_occ
 	for (i = 1, i0 = 0; i <= u->n; ++i) { // a bit overkilling for short reads, but may be beneficial for long centromeric reads
 		if (i == u->n || u->a[i].x[0] != u->a[i0].x[0] || u->a[i].size != u->a[i0].size) {
 			const mb_sai_t *p = &u->a[i0];
-			int32_t n = 0, step = p->size < max_occ? 1 : p->size / max_occ;
-			for (j = 0; j < p->size; j += step)
-				a[n++] = p->x[0] + j;
+			int32_t n = 0;
+			if (p->size <= max_occ) {
+				for (j = 0; j < p->size; ++j)
+					a[n++] = p->x[0] + j;
+			} else {
+				for (j = 0; j < p->size && n < max_occ;) {
+					int32_t step = (p->size - j) / (max_occ - n);
+					a[n++] = p->x[0] + j;
+					j += step;
+				}
+			}
 			mb_bwt_sa_batch(km, idx->bwt, n, a);
 			for (k = 0; k < n; ++k) {
 				for (j = i0; j < i; ++j) {
