@@ -17,8 +17,14 @@ void mb_mopt_init(mb_mopt_t *opt)
 	opt->min_chain_score = 40;
 	opt->rmq_inner_dist = 1000;
 	opt->rmq_size_cap = 100000;
-	opt->chn_pen_gap = 0.1f;
 	opt->chn_pen_skip = 0.05f;
+	// hit processing options
+	opt->mask_level = 0.5f;
+	opt->mask_len = 2147483647;
+	opt->sub_diff = 0;
+	opt->pri_ratio = 0.8f;
+	opt->best_n = 5;
+	opt->alt_diff_frac = 0.05f;
 	// I/O options
 	opt->n_thread = 4;
 	opt->mb_size = 500000000;

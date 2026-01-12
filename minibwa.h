@@ -26,6 +26,13 @@ typedef struct {
 	int32_t rmq_size_cap; // RMQ size cap
 	float chn_pen_gap; // gap penalty coefficient
 	float chn_pen_skip; // skip penalty coefficient
+	// hit processing options
+	float mask_level;
+	int32_t mask_len;
+	int32_t sub_diff;
+	float pri_ratio;
+	int32_t best_n;
+	float alt_diff_frac;
 	// input/output options
 	int32_t n_thread; // number of worker threads, excluding I/O threads
 	int64_t mb_size;  // mini-batch size
@@ -40,15 +47,23 @@ typedef struct {
 	uint64_t cigar[];
 } mb_extra_t;
 
+#define MB_PARENT_UNSET   (-1)
+#define MB_PARENT_TMP_PRI (-2)
+
 typedef struct {
 	int32_t id;             // ID for internal uses
 	int32_t cnt;            // number of anchors
-	int32_t score;          // chaining score
+	int32_t score, score0;  // chaining score; score0 is the original chaining score
 	int32_t as;             // offset in the a[] array (for internal uses only)
 	int32_t qs, qe;         // query start and end
-	int64_t tid;            // target ID (rev<<31 | tid)
+	int64_t tid;            // target ID (the original tid, NOT stranded)
 	int64_t ts, te;         // target start and end
-	uint32_t rev:1, dummy:31;
+	int32_t parent, n_sub, subsc;
+	int32_t mlen, blen;
+	float div;
+	uint32_t hash;
+	uint32_t rev:1, sam_pri:1, is_alt:1, inv:1, split:2, seg_split:1, strand_retained:1, dummy:24;
+	int32_t seg_id;
 	mb_extra_t *p;
 } mb_hit_t;
 
