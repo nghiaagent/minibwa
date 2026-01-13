@@ -296,7 +296,7 @@ static void mb_update_extra(mb_hit_t *r, const uint8_t *qseq, const uint8_t *tse
 	if (is_eqx) mm_update_cigar_eqx(r, qseq, tseq); // NB: it has to be called here as changes to qseq and tseq are not returned
 }
 
-void mb_enlarge_cigar(mb_hit_t *r, uint32_t n_cigar) // TODO: this calls the libc realloc()
+static void mb_enlarge_cigar(mb_hit_t *r, uint32_t n_cigar) // TODO: this calls the libc realloc()
 {
 	if (n_cigar == 0) return;
 	if (r->p == 0) {
@@ -500,10 +500,15 @@ static void mb_max_stretch(const mb_hit_t *r, const mb_anchor_t *a, int32_t *as,
 	*as = max_i, *cnt = max_len;
 }
 
+static inline int32_t mb_min_int32(int32_t a, int32_t b)
+{
+	return a < b? a : b;
+}
+
 static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int qlen, uint8_t *qseq0[2], mb_hit_t *r, mb_hit_t *r2, int n_a, mb_anchor_t *a, ksw_extz_t *ez)
 {
-	const int32_t max_back = 10; // allow up to 10bp "edges" from chain ends
-	int is_sr = !!(opt->flag & MB_F_SR);
+	int32_t is_sr = !!(opt->flag & MB_F_SR);
+	int32_t max_back = is_sr? 0 : 10; // for long reads, allow up to 10bp "edges" from chain ends
 	int32_t rev = a[r->as].sid&1, as1, cnt1;
 	uint8_t *tseq, *qseq, *tseq2 = 0;
 	int32_t i, l, bw, bw_long, dropped = 0, ksw_flag = 0, qs0, qe0;
@@ -522,19 +527,15 @@ static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int ql
 
 	if (is_sr) {
 		mb_max_stretch(r, a, &as1, &cnt1);
-		ts = a[as1].tpos + 1 - a[as1].len;
-		qs = a[as1].qpos + 1 - a[as1].len;
-		te = a[as1+cnt1-1].tpos + 1;
-		qe = a[as1+cnt1-1].qpos + 1;
 	} else {
 		mm_fix_bad_ends(r, a, opt->bw, opt->min_chain_score * 2, &as1, &cnt1);
 		mm_filter_bad_seeds(km, as1, cnt1, a, 10, 40, opt->max_gap>>1, 10);
 		mm_filter_bad_seeds_alt(km, as1, cnt1, a, 30, opt->max_gap>>1);
-		ts = a[as1].tpos + 1 - a[as1].len + (a[as1].len>>1 < max_back? a[as1].len>>1 : max_back);
-		qs = a[as1].qpos + 1 - a[as1].len + (a[as1].len>>1 < max_back? a[as1].len>>1 : max_back);
-		te = a[as1+cnt1-1].tpos + 1 - (a[as1+cnt1-1].len>>1 < max_back? a[as1+cnt1-1].len>>1 : max_back);
-		qe = a[as1+cnt1-1].qpos + 1 - (a[as1+cnt1-1].len>>1 < max_back? a[as1+cnt1-1].len>>1 : max_back);
 	}
+	ts = a[as1].tpos + 1 - a[as1].len + mb_min_int32(a[as1].len>>1, max_back);
+	qs = a[as1].qpos + 1 - a[as1].len + mb_min_int32(a[as1].len>>1, max_back);
+	te = a[as1+cnt1-1].tpos + 1 - mb_min_int32(a[as1+cnt1-1].len>>1, max_back);
+	qe = a[as1+cnt1-1].qpos + 1 - mb_min_int32(a[as1+cnt1-1].len>>1, max_back);
 	assert(cnt1 > 0);
 
 	/* Look for the start and end of regions to perform DP. This sounds easy
@@ -613,14 +614,9 @@ static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int ql
 	assert(qs1 >= 0 && ts1 >= 0);
 
 	for (i = is_sr? cnt1 - 1 : 1; i < cnt1; ++i) { // gap filling; for short genomic reads, fill from the first seed to the last
-		if ((a[as1+i].flag & (MB_SEED_IGNORE|MB_SEED_TANDEM)) && i != cnt1 - 1) continue;
-		if (is_sr) {
-			te = a[as1+i].tpos + 1;
-			qe = a[as1+i].qpos + 1;
-		} else {
-			te = a[as1+i].tpos + 1 - (a[as1+i].len>>1 < max_back? a[as1+i].len>>1 : max_back);
-			qe = a[as1+i].qpos + 1 - (a[as1+i].len>>1 < max_back? a[as1+i].len>>1 : max_back);
-		}
+		if ((a[as1+i].flag & MB_SEED_IGNORE) && i != cnt1 - 1) continue;
+		te = a[as1+i].tpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
+		qe = a[as1+i].qpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
 		te1 = te, qe1 = qe;
 		if (i == cnt1 - 1 || (a[as1+i].flag&MB_SEED_LONG_JOIN) || (qe - qs >= opt->min_ksw_len && te - ts >= opt->min_ksw_len)) { // gap filling
 			int32_t j, bw1 = bw_long, zdrop_code;
