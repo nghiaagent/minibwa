@@ -164,8 +164,8 @@ static inline int32_t comput_sc(const mb_anchor_t *ai, const mb_anchor_t *aj, in
  *   u[]: score<<32 | #anchors (sum of lower 32 bits of u[] is the returned length of a[])
  * input a[] is deallocated on return
  */
-mb_anchor_t *mb_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int max_iter, int min_sc, float chn_pen_gap, float chn_pen_skip,
-						  int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u, void *km)
+mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int max_skip, int max_iter, int min_sc, float chn_pen_gap, float chn_pen_skip,
+						  int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u)
 { // TODO: make sure this works when n has more than 32 bits
 	int32_t *f, *t, *v, n_u, n_v, mmax_f = 0, max_drop = bw;
 	int64_t *p, i, j, max_ii, st = 0;
@@ -262,8 +262,8 @@ static inline int32_t comput_sc_simple(const mb_anchor_t *ai, const mb_anchor_t 
 	return sc;
 }
 
-mb_anchor_t *mb_lchain_rmq(int max_dist, int max_dist_inner, int bw, int max_chn_skip, int cap_rmq_size, int min_sc, float chn_pen_gap, float chn_pen_skip,
-						   int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u, void *km)
+mb_anchor_t *mb_lchain_rmq(void *km, int max_dist, int max_dist_inner, int bw, int max_chn_skip, int cap_rmq_size, int min_sc, float chn_pen_gap, float chn_pen_skip,
+						   int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u)
 {
 	int32_t *f,*t, *v, n_u, n_v, mmax_f = 0, max_rmq_size = 0, max_drop = bw;
 	int64_t *p, i, i0, st = 0, st_inner = 0;

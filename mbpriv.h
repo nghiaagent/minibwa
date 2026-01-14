@@ -41,10 +41,10 @@ void mb_seed_intv(void *km, const mb_bwt_t *bwt, int32_t len, const uint8_t *seq
 void mb_anchor(void *km, const mb_idx_t *idx, const mb_sai_v *u, int32_t qlen, int32_t max_occ, mb_anchor_v *v);
 
 // defined in lchain.c
-mb_anchor_t *mb_lchain_dp(int max_dist_x, int max_dist_y, int bw, int max_skip, int max_iter, int min_sc, float chn_pen_gap, float chn_pen_skip,
-						  int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u, void *km);
-mb_anchor_t *mb_lchain_rmq(int max_dist, int max_dist_inner, int bw, int max_chn_skip, int cap_rmq_size, int min_sc, float chn_pen_gap, float chn_pen_skip,
-						   int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u, void *km);
+mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int max_skip, int max_iter, int min_sc, float chn_pen_gap, float chn_pen_skip,
+						  int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u);
+mb_anchor_t *mb_lchain_rmq(void *km, int max_dist, int max_dist_inner, int bw, int max_chn_skip, int cap_rmq_size, int min_sc, float chn_pen_gap, float chn_pen_skip,
+						   int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u);
 
 // defined in map-algo.c
 int32_t mb_cal_mblen(int32_t n, const mb_anchor_t *a, int32_t *blen_);
@@ -57,6 +57,9 @@ void mb_filter_hits(const mb_mopt_t *opt, int qlen, int *n_regs, mb_hit_t *regs)
 int mb_squeeze_a(void *km, int n_regs, mb_hit_t *regs, mb_anchor_t *a);
 void mb_split_hit(mb_hit_t *r, mb_hit_t *r2, int n, int qlen, mb_anchor_t *a, const l2b_t *l2b);
 
+// defined in align.c
+mb_hit_t *mb_align_skeleton(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int qlen, const char *qstr, int *n_regs_, mb_hit_t *regs, mb_anchor_t *a);
+
 // Fast log2 approximation (from minimap2)
 static inline float mb_log2(float x) // NB: this doesn't work when x<2
 {
@@ -67,6 +70,26 @@ static inline float mb_log2(float x) // NB: this doesn't work when x<2
 	log_2 += (-0.34484843f * z.f + 2.02466578f) * z.f - 0.67487759f;
 	return log_2;
 }
+
+static inline uint64_t mb_hash64(uint64_t x)
+{
+	x ^= x >> 30;
+	x *= 0xbf58476d1ce4e5b9ULL;
+	x ^= x >> 27;
+	x *= 0x94d049bb133111ebULL;
+	x ^= x >> 31;
+	return x;
+}
+
+static inline uint32_t mb_hash_str(const char *s)
+{
+	uint32_t h = 2166136261U;
+	const unsigned char *t = (const unsigned char*)s;
+	for (; *t; ++t)
+		h ^= *t, h *= 16777619;
+	return h;
+}
+
 #ifdef __cplusplus
 }
 #endif

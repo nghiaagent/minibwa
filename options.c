@@ -36,6 +36,7 @@ void mb_mopt_init(mb_mopt_t *opt)
 	opt->min_ksw_len = 200;
 	// I/O options
 	opt->n_thread = 4;
+	opt->seed = 11;
 	opt->mb_size = 500000000;
 	opt->max_sw_mat = 100000000;
 }

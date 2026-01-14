@@ -79,9 +79,8 @@ int main_fastmap(int argc, char *argv[])
 					uint64_t *cu;
 					mb_anchor_t *ca;
 					mb_hit_t *hit;
-					ca = mb_lchain_dp(opt.max_gap, opt.max_gap, opt.bw, opt.max_chain_skip, opt.max_chain_iter,
-									  opt.min_chain_score, opt.chn_pen_gap, opt.chn_pen_skip,
-									  v.n, v.a, &n_u, &cu, 0);
+					ca = mb_lchain_dp(0, opt.max_gap, opt.max_gap, opt.bw, opt.max_chain_skip, opt.max_chain_iter,
+									  opt.min_chain_score, opt.chn_pen_gap, opt.chn_pen_skip, v.n, v.a, &n_u, &cu);
 					v.a = 0; v.n = v.m = 0; // ownership transferred to ca
 					hit = mb_gen_hit(0, 0, ks->seq.l, idx->l2b, n_u, cu, ca);
 					mb_set_parent(0, opt.mask_level, opt.mask_len, n_u, hit, opt.sub_diff, 0);

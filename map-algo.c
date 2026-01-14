@@ -37,16 +37,6 @@ void mb_tbuf_destroy(mb_tbuf_t *b)
  * Basic hit operations *
  ************************/
 
-static inline uint64_t hash64(uint64_t x)
-{
-	x ^= x >> 30;
-	x *= 0xbf58476d1ce4e5b9ULL;
-	x ^= x >> 27;
-	x *= 0x94d049bb133111ebULL;
-	x ^= x >> 31;
-	return x;
-}
-
 int32_t mb_cal_mblen(int32_t n, const mb_anchor_t *a, int32_t *blen_)
 {
 	int32_t i;
@@ -101,7 +91,7 @@ mb_hit_t *mb_gen_hit(void *km, uint32_t hash, int qlen, const l2b_t *l2b, int n_
 	z = Kmalloc(km, mb128_t, n_u);
 	for (i = k = 0; i < n_u; ++i) {
 		uint32_t h;
-		h = (uint32_t)hash64((hash64(a[k].tpos) + hash64(a[k].qpos)) ^ hash);
+		h = (uint32_t)mb_hash64((mb_hash64(a[k].tpos) + mb_hash64(a[k].qpos)) ^ hash);
 		z[i].x = u[i] ^ h; // u[i] -- higher 32 bits: chain score; lower 32 bits: number of anchors
 		z[i].y = (uint64_t)k << 32 | (int32_t)u[i];
 		k += (int32_t)u[i];
@@ -251,15 +241,35 @@ void mb_select_sub(void *km, float pri_ratio, int min_diff, int best_n, int *n_,
 	}
 }
 
-mb_hit_t *mb_map(const mb_idx_t *idx, int64_t qlen, const char *seq0, int32_t *n_hit, mb_tbuf_t *b, const mb_mopt_t *opt, const char *qname)
+mb_hit_t *mb_map(const mb_mopt_t *opt, const mb_idx_t *idx, int64_t qlen, const char *seq0, int32_t *n_hit_, mb_tbuf_t *b, const char *qname)
 {
-	int64_t i;
-	void *km = b->km;
 	uint8_t *seq;
+	uint32_t hash;
+	int32_t i, n_hit;
+	uint64_t *w;
+	mb_sai_v u = {0,0,0};
+	mb_anchor_v v = {0,0,0};
+	mb_anchor_t *a;
+	mb_hit_t *hit;
 
-	seq = Kcalloc(km, uint8_t, qlen);
+	seq = Kmalloc(b->km, uint8_t, qlen);
 	for (i = 0; i < qlen; ++i)
 		seq[i] = kom_nt4_table[(uint8_t)seq0[i]];
-	kfree(km, seq);
-	return 0;
+
+	hash  = qname? mb_hash_str(qname) : 0;
+	hash ^= mb_hash64(qlen) + mb_hash64(opt->seed);
+	hash  = mb_hash64(hash);
+
+	mb_seed_intv(b->km, idx->bwt, qlen, seq, opt->min_len, opt->max_sub_occ, &u);
+	mb_anchor(b->km, idx, &u, qlen, opt->max_occ, &v);
+	a = mb_lchain_dp(b->km, opt->max_gap, opt->max_gap, opt->bw, opt->max_chain_skip, opt->max_chain_iter,
+					 opt->min_chain_score, opt->chn_pen_gap, opt->chn_pen_skip, v.n, v.a, &n_hit, &w);
+	v.a = 0; v.n = v.m = 0; // ownership transferred to a
+	kfree(b->km, u.a); // no longer needed
+
+	hit = mb_gen_hit(b->km, hash, qlen, idx->l2b, n_hit, w, a);
+	mb_set_parent(b->km, opt->mask_level, opt->mask_len, n_hit, hit, opt->sub_diff, 0);
+	//hit = mb_align_skeleton(km, opt, idx, qlen, seq0, &n_hit, hit, a);
+	kfree(b->km, seq);
+	return hit;
 }

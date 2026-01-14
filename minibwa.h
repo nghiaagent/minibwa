@@ -60,6 +60,7 @@ typedef struct {
 	int32_t min_ksw_len;
 	// input/output options
 	int32_t n_thread; // number of worker threads, excluding I/O threads
+	int32_t seed;
 	int64_t mb_size;  // mini-batch size
 	int64_t max_sw_mat;
 } mb_mopt_t;
