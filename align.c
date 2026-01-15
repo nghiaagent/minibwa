@@ -633,6 +633,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 			uint32_t cigar0 = (te - ts) << 4 | MB_CIGAR_MATCH;
 			assert(te - ts == qe - qs); // this should be an exact match
 			mb_append_cigar(r, 1, &cigar0);
+			r->p->dp_score += opt->a * (te - ts);
 		} else if (i == cnt1 - 1 || (a[as1+i].flag&MB_SEED_LONG_JOIN) || (qe - qs >= opt->min_ksw_len && te - ts >= opt->min_ksw_len)) { // gap filling
 			int32_t j, bw1 = bw_long, zdrop_code;
 			if (a[as1+i].flag & MB_SEED_LONG_JOIN)
