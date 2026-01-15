@@ -344,9 +344,10 @@ mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, const c
 
 	hit = mb_gen_hit(b->km, hash, qlen, idx->l2b, n_hit, w, a);
 	kfree(b->km, w);
-	mb_set_parent(b->km, opt->mask_level, opt->mask_len, n_hit, hit, opt->sub_diff, 0);
+	mb_set_parent(b->km, opt->mask_level, opt->mask_len, n_hit, hit, opt->a * 2 + opt->b, 0);
 	mb_select_sub(b->km, opt->pri_ratio, opt->min_len * 2, opt->best_n, &n_hit, hit);
 	hit = mb_align_skeleton(b->km, opt, idx, qlen, seq0, &n_hit, hit, a);
+	mb_set_parent(b->km, opt->mask_level, opt->mask_len, n_hit, hit, opt->a * 2 + opt->b, 0);
 	kfree(b->km, a);
 	kfree(b->km, seq);
 	*n_hit_ = n_hit;

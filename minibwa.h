@@ -8,8 +8,8 @@
 #define MB_F_SAM              (0x1LL)    // output in the SAM format
 #define MB_F_WRITE_UNMAP      (0x2LL)    // output unmapped query sequences
 #define MB_F_COPY_COMMENT     (0x4LL)    // copy FASTX comments to output (SAM only)
-#define MB_F_SR               (0x8LL)    // short-read mode
-#define MB_F_PE               (0x10LL)   // fragment/paired-end mode
+#define MB_F_PE               (0x8LL)    // fragment/paired-end mode
+#define MB_F_SR               (0x10LL)   // short-read mode
 #define MB_F_EQX              (0x20LL)   // = in CIGAR
 
 #define MB_CIGAR_MATCH      0
@@ -44,7 +44,6 @@ typedef struct {
 	// hit processing options
 	float mask_level;
 	int32_t mask_len;
-	int32_t sub_diff;
 	float pri_ratio;
 	int32_t best_n;
 	// alignment options
