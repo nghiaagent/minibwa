@@ -389,6 +389,15 @@ void mb_set_mapq(void *km, int n_regs, mb_hit_t *regs, int min_chain_sc, int mat
  * Core mapping routine *
  ************************/
 
+static void mb_dbg_seed(int64_t n, const mb_sai_t *u, const char *qname)
+{
+	int64_t i;
+	for (i = 0; i < n; ++i) {
+		const mb_sai_t *p = &u[i];
+		fprintf(stderr, "SD\t%s\t%d\t%d\t%ld\n", qname? qname : "*", (int32_t)(p->info>>32), (int32_t)p->info, (long)p->size);
+	}
+}
+
 static void mb_dbg_anchor(const mb_idx_t *idx, int qlen, int64_t n, const mb_anchor_t *a, const char *qname)
 {
 	int64_t i;
@@ -426,6 +435,7 @@ mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, const c
 	chn_pen_gap = opt->chain_gap_scale * .01 * opt->min_len;
 	chn_pen_skip = opt->chain_skip_scale * .01 * opt->min_len;
 	mb_seed_intv(b->km, idx->bwt, qlen, seq, opt->min_len, opt->max_sub_occ, &u);
+	if (kom_dbg_flag & MB_DBG_SEED) mb_dbg_seed(u.n, u.a, qname);
 	mb_anchor(b->km, idx, &u, qlen, opt->max_occ, &v);
 	if (kom_dbg_flag & MB_DBG_ANCHOR) mb_dbg_anchor(idx, qlen, v.n, v.a, qname);
 	a = mb_lchain_dp(b->km, opt->max_gap, opt->max_gap, opt->bw, opt->max_chain_skip, opt->max_chain_iter,

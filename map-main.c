@@ -170,6 +170,7 @@ static ko_longopt_t long_options[] = {
 	{ "no-kalloc",    ko_no_argument,       301 },
 	{ "dbg-aln-seq",  ko_no_argument,       601 },
 	{ "dbg-anchor",   ko_no_argument,       602 },
+	{ "dbg-seed",     ko_no_argument,       603 },
 	{ "version",      ko_no_argument,       901 },
 	{ 0, 0, 0 }
 };
@@ -249,6 +250,8 @@ int main_map(int argc, char *argv[])
 			kom_dbg_flag |= MB_DBG_ALN_SEQ;
 		} else if (c == 602) { // --dbg-anchor
 			kom_dbg_flag |= MB_DBG_ANCHOR;
+		} else if (c == 603) { // --dbg-seed
+			kom_dbg_flag |= MB_DBG_SEED;
 		} else if (c == 901) { // --version
 			puts(MB_VERSION);
 			exit(0);
