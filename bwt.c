@@ -55,6 +55,12 @@ static uint64_t mb_bwt_data_len(uint64_t len)
 	return bwt_len + occ_len;
 }
 
+/* BWT layout. Each block consists of u64[4]+u32[8], 64 bytes in total. The
+ * lower 56 bits of u64[4] (see BWT_CNT_SHIFT) store the accumulative count of
+ * A/C/G/T bases. The higher 8 bits store the count of A/C/G/T in the next
+ * 64nt. u32[8] keeps a BWT substring of 128nt in length. Because it follows
+ * little endian, it can also be considered as u64[4] etc.
+ */
 mb_bwt_t *mb_bwt_init_from_raw(int is_byte, const void *raw_, uint64_t len, uint64_t primary)
 {
 	uint64_t c[4], x[4], i, k, *last_c = 0;
