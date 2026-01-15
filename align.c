@@ -330,6 +330,7 @@ static void mb_append_cigar(mb_hit_t *r, uint32_t n_cigar, const uint32_t *cigar
 static void mb_align_pair(void *km, const mb_mopt_t *opt, int qlen, const uint8_t *qseq, int tlen, const uint8_t *tseq,
 						  const int8_t *mat, int w, int end_bonus, int zdrop, int ksw_flag, ksw_extz_t *ez)
 {
+	//fprintf(stderr, "%d:%d\n", tlen, qlen);
 	if (opt->b_ts != 0 && opt->b != opt->b_ts)
 		ksw_flag |= KSW_EZ_GENERIC_SC;
 	if (opt->max_sw_mat > 0 && (int64_t)tlen * qlen > opt->max_sw_mat) { // too much memory; skip alignment
@@ -511,8 +512,8 @@ static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int ql
 	int32_t max_back = is_sr? 0 : 10; // for long reads, allow up to 10bp "edges" from chain ends
 	int32_t rev = a[r->as].sid&1, as1, cnt1;
 	uint8_t *tseq, *qseq, *tseq2 = 0;
-	int32_t i, l, bw, bw_long, dropped = 0, ksw_flag = 0, qs0, qe0;
-	int64_t tid = a[r->as].sid >> 1;
+	int32_t i, bw, bw_long, dropped = 0, ksw_flag = 0, qs0, qe0;
+	int64_t tid = a[r->as].sid >> 1, l;
 	int64_t ts0, te0;
 	int64_t ts, te, ts1, te1;
 	int32_t qs, qe, qs1, qe1;
@@ -550,7 +551,7 @@ static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int ql
 		ts0 = ts - l > 0? ts - l : 0;
 		l = qlen - qe;
 		l += l * opt->a + opt->end_bonus > opt->q? (l * opt->a + opt->end_bonus - opt->q) / opt->e : 0;
-		te0 = te + l < (int32_t)mi->l2b->ctg[tid].len? te + l : mi->l2b->ctg[tid].len;
+		te0 = te + l < mi->l2b->ctg[tid].len? te + l : mi->l2b->ctg[tid].len;
 	} else {
 		// compute ts0 and qs0
 		ts0 = a[r->as].tpos + 1 - a[r->as].len;
@@ -579,7 +580,7 @@ static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int ql
 			qe0 = qe0 > qe1? qe0 : qe1; // at least include qe0
 			l += l * opt->a > opt->q? (l * opt->a - opt->q) / opt->e : 0;
 			l = l < opt->max_gap? l : opt->max_gap;
-			l = l < (int32_t)mi->l2b->ctg[tid].len - te? l : mi->l2b->ctg[tid].len - te;
+			l = l < mi->l2b->ctg[tid].len - te? l : mi->l2b->ctg[tid].len - te;
 			te1 = te1 < te + l? te1 : te + l;
 			te0 = te0 > te1? te0 : te1;
 		} else te0 = te, qe0 = qe;
@@ -613,12 +614,16 @@ static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int ql
 	te1 = ts, qe1 = qs;
 	assert(qs1 >= 0 && ts1 >= 0);
 
-	for (i = is_sr? cnt1 - 1 : 1; i < cnt1; ++i) { // gap filling; for short genomic reads, fill from the first seed to the last
+	for (i = is_sr? cnt1 - 1 : 0; i < cnt1; ++i) { // gap filling; for short genomic reads, fill from the first seed to the last
 		if ((a[as1+i].flag & MB_SEED_IGNORE) && i != cnt1 - 1) continue;
 		te = a[as1+i].tpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
 		qe = a[as1+i].qpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
 		te1 = te, qe1 = qe;
-		if (i == cnt1 - 1 || (a[as1+i].flag&MB_SEED_LONG_JOIN) || (qe - qs >= opt->min_ksw_len && te - ts >= opt->min_ksw_len)) { // gap filling
+		if (cnt1 == 1) {
+			uint32_t cigar0 = (te - ts) << 4 | MB_CIGAR_MATCH;
+			assert(te - ts == qe - qs); // this should be an exact match
+			mb_append_cigar(r, 1, &cigar0);
+		} else if (i == cnt1 - 1 || (a[as1+i].flag&MB_SEED_LONG_JOIN) || (qe - qs >= opt->min_ksw_len && te - ts >= opt->min_ksw_len)) { // gap filling
 			int32_t j, bw1 = bw_long, zdrop_code;
 			if (a[as1+i].flag & MB_SEED_LONG_JOIN)
 				bw1 = qe - qs > te - ts? qe - qs : te - ts;
@@ -691,6 +696,7 @@ static void mb_align1(void *km, const mb_mopt_t *opt, const mb_idx_t *mi, int ql
 	if (!rev) r->qs = qs1, r->qe = qe1;
 	else r->qs = qlen - qe1, r->qe = qlen - qs1;
 
+	//for (i = 0; i < r->p->n_cigar; ++i) fprintf(stderr, "%d%c", r->p->cigar[i]>>4, MB_CIGAR_STR[r->p->cigar[i]&0xf]); fprintf(stderr, "\n");
 	assert(te1 - ts1 <= te0 - ts0);
 	if (r->p) {
 		l2b_getseq(mi->l2b, 0, tid, ts1, te1, tseq);

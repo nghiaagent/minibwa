@@ -22,7 +22,7 @@ void mb_mopt_init(mb_mopt_t *opt)
 	opt->mask_level = 0.5f;
 	opt->mask_len = INT32_MAX;
 	opt->sub_diff = 0;
-	opt->pri_ratio = 0.8f;
+	opt->pri_ratio = 0.5f;
 	opt->best_n = 5;
 	// alignment options
 	opt->a = 2,  opt->b = 8;
@@ -49,8 +49,10 @@ int mb_set_preset(const char *preset, mb_mopt_t *opt)
 	} else if (strcmp(preset, "asm5") == 0) { // to be added
 	} else if (strcmp(preset, "sr") == 0) {
 		mb_mopt_init(opt);
-		opt->flag |= MB_F_FRAG_MODE;
+		opt->flag |= MB_F_SR | MB_F_FRAG_MODE;
 		opt->max_gap = 100;
+		opt->pri_ratio = 0.5f;
+		opt->best_n = 20;
 		opt->end_bonus = 10;
 		opt->bw = opt->bw_long = 100;
 		opt->min_chain_score = 25;

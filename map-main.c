@@ -177,6 +177,8 @@ static int usage(FILE *fp, const mb_mopt_t *opt)
 	fprintf(fp, "Options:\n");
 	fprintf(fp, "  Mapping:\n");
 	fprintf(fp, "    -k INT           min k-mer length [%d]\n", opt->min_len);
+	fprintf(fp, "    -p FLOAT         min secondary-to-primary score ratio [%g]\n", opt->pri_ratio);
+	fprintf(fp, "    -N INT           retain at most INT secondary alignments [%d]\n", opt->best_n);
 	fprintf(fp, "  Input/Output:\n");
 	fprintf(fp, "    -t INT           number of worker threads [%d]\n", opt->n_thread);
 	fprintf(fp, "    -K NUM           process NUM-bp query sequences in a batch [500m]\n");
@@ -200,16 +202,33 @@ static inline void yes_or_no(mb_mopt_t *opt, uint64_t flag, int long_idx, const 
 
 int main_map(int argc, char *argv[])
 {
+	const char *opt_str = "x:o:k:p:t:K:N:";
 	int32_t c;
 	mb_idx_t *idx;
 	mb_mopt_t mo;
 	char *fn_out = 0;
 	ketopt_t o = KETOPT_INIT;
 
-	kom_realtime(); // reset the timer
 	mb_mopt_init(&mo);
-	while ((c = ketopt(&o, argc, argv, 1, "o:k:t:K:", long_options)) >= 0) {
+	while ((c = ketopt(&o, argc, argv, 1, opt_str, long_options)) >= 0) { // test command line options and apply option -x/preset first
+		if (c == 'x') {
+			if (mb_set_preset(o.arg, &mo) < 0) {
+				fprintf(stderr, "[ERROR] unknown preset '%s'\n", o.arg);
+				return 1;
+			}
+		} else if (c == ':') {
+			fprintf(stderr, "[ERROR] missing option argument\n");
+			return 1;
+		} else if (c == '?') {
+			fprintf(stderr, "[ERROR] unknown option in \"%s\"\n", argv[o.i - 1]);
+			return 1;
+		}
+	}
+	o = KETOPT_INIT;
+	while ((c = ketopt(&o, argc, argv, 1, opt_str, long_options)) >= 0) {
 		if (c == 'k') mo.min_len = atoi(o.arg);
+		else if (c == 'p') mo.pri_ratio = atof(o.arg);
+		else if (c == 'N') mo.best_n = atoi(o.arg);
 		else if (c == 'o') fn_out = o.arg;
 		else if (c == 't') mo.n_thread = atoi(o.arg);
 		else if (c == 'K') mo.mb_size = kom_parse_num(o.arg, 0);

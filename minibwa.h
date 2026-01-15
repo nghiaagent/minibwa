@@ -74,7 +74,7 @@ typedef struct {
 	int32_t dp_max0;                   // DP score before mb_update_dp_max() adjustment
 	uint32_t n_ambi;                   // number of ambiguous bases;
 	int32_t n_cigar;                   // number of cigar operations in cigar[]
-	uint64_t cigar[];
+	uint32_t cigar[];
 } mb_extra_t;
 
 #define MB_PARENT_UNSET   (-1)
