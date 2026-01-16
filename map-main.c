@@ -36,6 +36,7 @@ static void worker_for(void *data, long i, int tid)
 	int32_t j, off = s->seg_off[i];
 	for (j = 0; j < s->n_seg[i]; ++j) {
 		const mb_bseq1_t *t = &s->seq[off + j];
+		if (kom_dbg_flag & MB_DBG_QNAME) fprintf(stderr, "QN\t%s\t%d\n", t->name, tid);
 		s->hit[off+j] = mb_map(opt, idx, t->l_seq, t->seq, &s->n_hit[off+j], b, t->name);
 	}
 }
@@ -171,6 +172,7 @@ static ko_longopt_t long_options[] = {
 	{ "dbg-aln-seq",  ko_no_argument,       601 },
 	{ "dbg-anchor",   ko_no_argument,       602 },
 	{ "dbg-seed",     ko_no_argument,       603 },
+	{ "dbg-qname",    ko_no_argument,       604 },
 	{ "version",      ko_no_argument,       901 },
 	{ 0, 0, 0 }
 };
@@ -254,6 +256,8 @@ int main_map(int argc, char *argv[])
 			kom_dbg_flag |= MB_DBG_ANCHOR;
 		} else if (c == 603) { // --dbg-seed
 			kom_dbg_flag |= MB_DBG_SEED;
+		} else if (c == 604) { // --dbg-qname
+			kom_dbg_flag |= MB_DBG_QNAME;
 		} else if (c == 901) { // --version
 			puts(MB_VERSION);
 			exit(0);
