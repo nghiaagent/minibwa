@@ -253,13 +253,22 @@ int64_t mb_bwt_smem(const mb_bwt_t *f, uint32_t len, const uint8_t *q, int64_t x
 
 	assert(min_occ <= max_occ);
 	assert(len <= INT32_MAX); // this can be relaxed if we define a new struct for mem
-	p->size = 0;
+	p->size = ik.size = 0;
 	if (len - x < min_len) return len;
 	for (i = x, xn = -1; i < x + min_len; ++i) // find the last N in [x,x+min_len)
 		if (q[i] > 3) xn = i;
 	if (xn >= 0) return xn + 1;
-	mb_bwt_set_intv(f, q[x + min_len - 1], &ik);
-	for (i = x + min_len - 2; i >= x; --i) { // backward extension
+	if (f->pre && min_len > f->pre_len) {
+		uint64_t z = 0, l = 0;
+		for (i = x + min_len - 1; l < f->pre_len; --i, ++l)
+			z = z << 2 | q[i];
+		ik = f->pre[z];
+	}
+	if (ik.size < min_occ) {
+		mb_bwt_set_intv(f, q[x + min_len - 1], &ik);
+		i = x + min_len - 2;
+	}
+	for (; i >= x; --i) { // backward extension
 		int c = q[i];
 		if (c > 3) break;
 		mb_bwt_extend(f, &ik, ok, 1);
@@ -399,6 +408,14 @@ void mb_bwt_count_kmer(const mb_bwt_t *bwt, int32_t depth, mb_sai_t *s)
 			}
 		}
 	}
+}
+
+void mb_bwt_cache(mb_bwt_t *bwt, int32_t len)
+{
+	if (bwt->pre) free(bwt->pre);
+	bwt->pre_len = len;
+	bwt->pre = kom_calloc(mb_sai_t, 1 << len*2);
+	mb_bwt_count_kmer(bwt, len, bwt->pre);
 }
 
 /*************************

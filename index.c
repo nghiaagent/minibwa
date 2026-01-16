@@ -236,6 +236,7 @@ mb_idx_t *mb_idx_load(const char *prefix)
 		l2b_destroy(l2b);
 		goto end_idx_load;
 	}
+	mb_bwt_cache(bwt, 10);
 	idx = kom_calloc(mb_idx_t, 1);
 	idx->l2b = l2b, idx->bwt = bwt;
 end_idx_load:
