@@ -9,6 +9,7 @@ LOBJS=		kommon.o kalloc.o kmempool.o bwt.o l2bit.o options.o seed.o map-algo.o l
 AOBJS=		kthread.o QSufSort.o bwtgen.o libsais.o libsais64.o index.o bseq.o map-main.o fastmap.o
 PROG=		minibwa
 LIBS=		-lpthread -lz -lm
+ARCH=		$(shell uname -m)
 
 ifneq ($(asan),)
 	CFLAGS+=-fsanitize=address
@@ -19,6 +20,10 @@ ifneq ($(omp),0)
 	CPPFLAGS=-DLIBSAIS_OPENMP
 	CFLAGS+=-fopenmp
 	LIBS+=-fopenmp
+endif
+
+ifeq ($(ARCH), x86_64)
+	CFLAGS+=-msse4.2 -mpopcnt
 endif
 
 .SUFFIXES:.c .cpp .o
