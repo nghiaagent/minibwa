@@ -14,9 +14,12 @@ KRADIX_SORT_INIT(mb_sais, mb_sai_t, key_sais, 8)
 #define key_anchor(a) ((a).tpos)
 KRADIX_SORT_INIT(mb_anchor, mb_anchor_t, key_anchor, 8)
 
+/***********
+ * Seeding *
+ ***********/
+
 void mb_seed_intv(void *km, const mb_bwt_t *bwt, int32_t len, const uint8_t *seq, int32_t min_len, int32_t max_sub_occ, mb_sai_v *v)
 {
-	const int max_back = 5;
 	int64_t x = 0, i, n_a0;
 	mb_sai_t p;
 
@@ -47,9 +50,59 @@ void mb_seed_intv(void *km, const mb_bwt_t *bwt, int32_t len, const uint8_t *seq
 	}
 }
 
+static void mb_seed_sort_dedup(mb_sai_v *u)
+{
+	int64_t i, i0, j;
+	// sort by ::x[0] and then by ::size
+	if (u->n > 1) radix_sort_mb_sai0(u->a, u->a + u->n);
+	for (i = 1, i0 = 0; i <= u->n; ++i) {
+		if (i == u->n || u->a[i].x[0] != u->a[i0].x[0]) {
+			if (i - i0 > 1) {
+				radix_sort_mb_sais(&u->a[i0], &u->a[i]);
+				kom_reverse(mb_sai_t, u->n, u->a);
+			}
+			i0 = i;
+		}
+	}
+	// dedup
+	for (i = 1, j = 0; i < u->n; ++i)
+		if (!(u->a[i].x[0] == u->a[j].x[0] && u->a[i].size == u->a[j].size && u->a[i].info == u->a[j].info))
+			u->a[++j] = u->a[i];
+	u->n = j + 1;
+}
+
 /************************
  * Get contig positions *
  ************************/
+
+/* Remove duplicated anchors. The two-round seeding algorithm may lead an
+ * anchor precisely contained in a longer anchor. This routine filters out the
+ * shorter anchor. This wouldn't happen to minimap2. */
+static void mb_anchor_dedup(mb_anchor_v *v) // NB: assuming sorted by tpos
+{
+	const int max_back = 100; // to avoid quadratic behavior in the worst case
+	int64_t i, j, k;
+	for (i = 1; i < v->n; ++i) {
+		mb_anchor_t *ai = &v->a[i];
+		int64_t tsj, tsi = ai->tpos + 1 - ai->len;
+		int32_t qsj, qsi = ai->qpos + 1 - ai->len;
+		for (j = i - 1, k = 0; j >= 0 && k < max_back; --j, ++k) {
+			mb_anchor_t *aj = &v->a[j];
+			if (aj->sid != ai->sid) break;
+			if (aj->tpos < tsi) break;
+			tsj = aj->tpos + 1 - aj->len;
+			qsj = aj->qpos + 1 - aj->len;
+			if (tsj >= tsi) { // then j is contained in i
+				if (tsj - tsi == qsj - qsi) aj->flt = 1;
+			} else if (ai->tpos == aj->tpos) { // then i is contained in j
+				if (ai->qpos == aj->qpos) ai->flt = 1;
+			}
+		}
+	}
+	for (i = j = 0; i < v->n; ++i)
+		if (!v->a[i].flt) v->a[j++] = v->a[i];
+	v->n = j;
+}
 
 typedef struct { int64_t st, en; } anchor_aux_t;
 typedef struct { int64_t a, i; } sa_aux_t;
@@ -82,27 +135,9 @@ static void process_batch(void *km, const mb_idx_t *idx, const anchor_aux_t *aux
 	}
 }
 
-static void mb_anchor_sort_dedup(mb_sai_v *u)
-{
-	int64_t i, i0, j;
-	// sort by ::x[0] and then by ::size
-	if (u->n > 1) radix_sort_mb_sai0(u->a, u->a + u->n);
-	for (i = 1, i0 = 0; i <= u->n; ++i) {
-		if (i == u->n || u->a[i].x[0] != u->a[i0].x[0]) {
-			if (i - i0 > 1) {
-				radix_sort_mb_sais(&u->a[i0], &u->a[i]);
-				kom_reverse(mb_sai_t, u->n, u->a);
-			}
-			i0 = i;
-		}
-	}
-	// dedup
-	for (i = 1, j = 0; i < u->n; ++i)
-		if (!(u->a[i].x[0] == u->a[j].x[0] && u->a[i].size == u->a[j].size && u->a[i].info == u->a[j].info))
-			u->a[++j] = u->a[i];
-	u->n = j + 1;
-}
-
+/* Converting seed intervals to anchors. This function batches small SA
+ * intervals and calls mb_bwt_sa_batch() in process_batch(). With prefetch, the
+ * strategy noticeably improves the performance. */
 void mb_anchor(void *km, const mb_idx_t *idx, mb_sai_v *u, int32_t qlen, int32_t max_occ, mb_anchor_v *v)
 {
 	const int batch_size = 20;
@@ -114,7 +149,7 @@ void mb_anchor(void *km, const mb_idx_t *idx, mb_sai_v *u, int32_t qlen, int32_t
 
 	v->n = 0;
 	if (u->n == 0) return; // no anchors
-	mb_anchor_sort_dedup(u);
+	mb_seed_sort_dedup(u);
 
 	for (i = 0, k = 0; i < u->n; ++i) // pre-calculate the size of v->a
 		k += u->a[i].size < max_occ? u->a[i].size : max_occ;
@@ -163,4 +198,5 @@ void mb_anchor(void *km, const mb_idx_t *idx, mb_sai_v *u, int32_t qlen, int32_t
 		const l2b_ctg_t *ctg = &idx->l2b->ctg[q->sid>>1];
 		q->tpos -= ctg->off * 2 + ctg->len * (q->sid&1);
 	}
+	mb_anchor_dedup(v);
 }

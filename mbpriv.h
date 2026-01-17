@@ -24,7 +24,7 @@ typedef struct {
 	int32_t sid; // tid<<1|rev
 	int32_t len; // length of the anchor
 	int32_t qpos; // the query coordinate of the last base in the anchor; the start base is qpos+1-len
-	uint32_t flag;
+	uint32_t flag:31, flt:1;
 	int64_t tpos; // target/contig coordinate
 } mb_anchor_t;
 
