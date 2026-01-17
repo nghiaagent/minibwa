@@ -349,7 +349,7 @@ static void mb_set_inv_mapq(void *km, int n_regs, mb_hit_t *regs)
 void mb_set_mapq(void *km, int n_regs, mb_hit_t *regs, int min_chain_sc, int match_sc, int is_sr)
 {
 	const int32_t mapQ_coef_len = 50;
-	const double mapQ_coef_fac = 3.0; // int(log(mapQ_coef_len)). Well, this is an unintended bug in bwa-mem, but let's match it for now
+	const double mapQ_coef_fac = 3.912023005428146; // log(mapQ_coef_len)). Bwa-mem uses 3.0, which is an unintended bug
 	const double q_coef = 40.0f;
 	int i;
 	if (n_regs == 0) return;
