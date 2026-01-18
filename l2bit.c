@@ -29,7 +29,8 @@ int64_t l2b_intv2cid(const l2b_t *l2b, uint64_t st, uint64_t en, int64_t *cst, i
 int64_t l2b_getseq(const l2b_t *l2b, int64_t tid, int64_t st, int64_t en, uint8_t *seq) // TODO: ambiguous bases
 {
 	const l2b_ctg_t *ctg;
-	int64_t i;
+	int64_t i, aid;
+	int32_t n_ambi;
 	if (tid < 0 || tid >= l2b->n_ctg) return -1;
 	ctg = &l2b->ctg[tid];
 	if (st < 0) st = 0;
@@ -38,6 +39,17 @@ int64_t l2b_getseq(const l2b_t *l2b, int64_t tid, int64_t st, int64_t en, uint8_
 	en += ctg->off;
 	for (i = st; i < en; ++i)
 		seq[i - st] = l2b_get0(l2b, i);
+	// retrieve ambiguous bases
+	aid = l2b_getambi(l2b, tid, st - ctg->off, en - ctg->off, &n_ambi);
+	if (aid >= 0) {
+		for (i = 0; i < n_ambi; ++i) {
+			const l2b_intv_t *iv = &l2b->ambi[aid + i];
+			int64_t s = iv->st, e = iv->en;
+			if (s < st) s = st;
+			if (e > en) e = en;
+			if (s < e) memset(&seq[s - st], 4, e - s);
+		}
+	}
 	return en - st;
 
 }
