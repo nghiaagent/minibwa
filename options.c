@@ -26,6 +26,8 @@ void mb_opt_init(mb_opt_t *opt)
 	opt->zdrop = 400;
 	opt->zdrop_inv = 200;
 	// I/O options
+	opt->sb_len = 1000000;
+	opt->sb_seq = 24;
 	opt->n_thread = 1;
 	opt->seed = 11;
 	opt->max_sw_mat = 100000000;

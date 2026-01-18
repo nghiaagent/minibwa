@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <errno.h>
 #include "kommon.h"
@@ -20,8 +21,9 @@ typedef struct {
 
 typedef struct {
 	const pipeline_t *p;
-    int32_t n_seq, n_frag;
-	int32_t *n_hit, *seg_off, *n_seg;
+    int32_t n_seq, n_frag, n_sb;
+	int32_t *n_hit, *seg_off, *seg_cnt;
+	int32_t *sb_off, *sb_cnt;
 	mb_bseq1_t *seq;
 	mb_hit_t **hit;
 	mb_tbuf_t **tbuf;
@@ -34,7 +36,7 @@ static void worker_for(void *data, long i, int tid)
 	const mb_idx_t *idx = s->p->idx;
 	mb_tbuf_t *b = s->tbuf[tid];
 	int32_t j, off = s->seg_off[i];
-	for (j = 0; j < s->n_seg[i]; ++j) {
+	for (j = 0; j < s->seg_cnt[i]; ++j) {
 		const mb_bseq1_t *t = &s->seq[off + j];
 		if (kom_dbg_flag & MB_DBG_QNAME) fprintf(stderr, "QN\t%s\t%d\n", t->name, tid);
 		s->hit[off+j] = mb_map(opt, idx, t->l_seq, t->seq, &s->n_hit[off+j], b, t->name);
@@ -45,6 +47,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
 {
 	int i, j, k;
     pipeline_t *p = (pipeline_t*)shared;
+	const mb_opt_t *opt = p->opt;
     if (step == 0) { // step 0: read sequences
 		int with_qual = !!(p->opt->flag & MB_F_SAM);
 		int with_comment = (!!(p->opt->flag & MB_F_SAM) && !!(p->opt->flag & MB_F_COPY_COMMENT));
@@ -54,21 +57,38 @@ static void *worker_pipeline(void *shared, int step, void *in)
 		if (p->n_fp > 1) s->seq = mb_bseq_read_frag(p->n_fp, p->fp, p->mb_size, with_qual, with_comment, &s->n_seq);
 		else s->seq = mb_bseq_read(p->fp[0], p->mb_size, with_qual, with_comment, frag_mode, &s->n_seq);
 		if (s->seq) {
+			int32_t sb_len, sb_cnt, sb_off;
 			s->p = p;
 			for (i = 0; i < s->n_seq; ++i)
 				s->seq[i].id = p->n_seq++;
 			s->tbuf = kom_calloc(mb_tbuf_t*, p->opt->n_thread);
 			for (i = 0; i < p->opt->n_thread; ++i)
 				s->tbuf[i] = mb_tbuf_init(p->opt->flag&MB_F_NO_KALLOC);
-			s->n_hit = kom_calloc(int32_t, 3 * s->n_seq);
-			s->n_seg = s->n_hit + s->n_seq;
-			s->seg_off = s->n_seg + s->n_seq;
+			s->n_hit = kom_calloc(int32_t, 5 * s->n_seq); // maybe over allocation as the following 4 members may not need this much
+			s->seg_off = s->n_hit   + s->n_seq;
+			s->seg_cnt = s->seg_off + s->n_seq;
+			s->sb_off  = s->seg_cnt + s->n_seq;
+			s->sb_cnt  = s->sb_off  + s->n_seq;
 			s->hit = kom_calloc(mb_hit_t*, s->n_seq);
-			for (i = 1, j = 0; i <= s->n_seq; ++i) { // set n_seg[] and seg_off[]
+			// set seg_cnt[] and seg_off[]
+			for (i = 1, j = 0; i <= s->n_seq; ++i) {
 				if (i == s->n_seq || !frag_mode || !mb_qname_same(s->seq[i-1].name, s->seq[i].name)) {
-					s->n_seg[s->n_frag] = i - j;
+					assert(i - j <= 2);
+					s->seg_cnt[s->n_frag] = i - j;
 					s->seg_off[s->n_frag++] = j;
 					j = i;
+				}
+			}
+			// set sb_cnt[] and sb_off[]
+			for (i = 0, sb_len = sb_cnt = sb_off = 0; i < s->n_frag; ++i) {
+				sb_cnt += s->seg_cnt[i];
+				for (j = 0; j < s->seg_cnt[i]; ++j)
+					sb_len += s->seq[s->seg_off[i] + j].l_seq;
+				if (i == s->n_frag - 1 || sb_len >= opt->sb_len || sb_cnt >= opt->sb_seq) {
+					s->sb_off[s->n_sb] = sb_off;
+					s->sb_cnt[s->n_sb++] = sb_cnt;
+					sb_cnt = sb_len = 0;
+					sb_off = i;
 				}
 			}
 			return s;
@@ -88,7 +108,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
 		if (!(p->opt->flag & MB_F_NO_KALLOC)) km = km_init();
 
 		for (k = 0; k < s->n_frag; ++k) {
-			int32_t seg_st = s->seg_off[k], seg_en = s->seg_off[k] + s->n_seg[k], n_sec = 0;
+			int32_t seg_st = s->seg_off[k], seg_en = s->seg_off[k] + s->seg_cnt[k], n_sec = 0;
 			out.l = 0;
 			for (i = seg_st; i < seg_en; ++i) {
 				mb_bseq1_t *t = &s->seq[i];

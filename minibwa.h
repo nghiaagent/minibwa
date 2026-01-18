@@ -60,6 +60,8 @@ typedef struct {
 	int32_t zdrop_inv;
 	int32_t min_ksw_len;
 	// input/output options
+	int32_t sb_len;   // number of bases for batch smem
+	int32_t sb_seq;   // number of sequences for batch smem
 	int32_t n_thread; // number of worker threads, excluding I/O threads
 	int32_t out_n;    // max number of secondary alignments to output
 	int32_t seed;
