@@ -72,13 +72,13 @@ static void worker_for_batch(void *data, long i, int tid)
 			len[p] = t->l_seq;
 			seq[p] = Kcalloc(km, uint8_t, t->l_seq);
 			for (l = 0; l < t->l_seq; ++l)
-				seq[p][l] = kom_nt4_table[(uint8_t)t->seq[i]];
+				seq[p][l] = kom_nt4_table[(uint8_t)t->seq[l]];
+			//mb_seed_intv(km, idx->bwt, len[p], seq[p], opt->min_len, opt->max_sub_occ, &sai[p]);
 			++p;
 		}
 	}
 	assert(p == n);
 	mb_seed_intv_batch(km, idx->bwt, n, len, seq, opt->min_len, opt->max_sub_occ, sai);
-	fprintf(stderr, "here: %ld\n", i);
 	for (k = p = 0; k < s->sb_cnt[i]; ++k) {
 		int32_t off = s->seg_off[s->sb_off[i] + k];
 		int32_t cnt = s->seg_cnt[s->sb_off[i] + k];
@@ -132,20 +132,22 @@ static void *worker_pipeline(void *shared, int step, void *in)
 			}
 			// set sb_cnt[] and sb_off[]
 			for (i = 0, sb_len = sb_off = 0; i < s->n_frag; ++i) {
-				for (j = 0; j < s->seg_cnt[i]; ++j)
-					sb_len += s->seq[s->seg_off[i] + j].l_seq;
-				if (i == s->n_frag - 1 || sb_len >= opt->sb_len || i - sb_off >= opt->sb_seq) {
+				if (sb_len >= opt->sb_len || i - sb_off >= opt->sb_seq) {
 					s->sb_off[s->n_sb] = sb_off;
 					s->sb_cnt[s->n_sb++] = i - sb_off;
 					sb_len = 0;
 					sb_off = i;
 				}
+				for (j = 0; j < s->seg_cnt[i]; ++j)
+					sb_len += s->seq[s->seg_off[i] + j].l_seq;
 			}
+			s->sb_off[s->n_sb] = sb_off;
+			s->sb_cnt[s->n_sb++] = i - sb_off;
 			return s;
 		} else free(s);
     } else if (step == 1) { // step 1: map
         step_t *s = (step_t*)in;
-		if (1 || s->n_sb == s->n_frag)
+		if (0 || s->n_sb == s->n_frag)
 			kt_for(p->opt->n_thread, worker_for, in, s->n_sb);
 		else
 			kt_for(p->opt->n_thread, worker_for_batch, in, s->n_sb);
