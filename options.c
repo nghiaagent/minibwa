@@ -37,8 +37,8 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 	if (strcmp(preset, "sr") == 0) {
 		opt->flag |= MB_F_PE;
 		opt->min_len = 19;
-		opt->bw = opt->bw_long = 100;
-		opt->max_gap = 100;
+		opt->bw = opt->bw_long = 150;
+		opt->max_gap = 150;
 		opt->pri_ratio = 0.5f;
 		opt->best_n = 101;
 		opt->end_bonus = 10;
