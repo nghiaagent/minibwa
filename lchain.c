@@ -130,20 +130,18 @@ static mb_anchor_t *compact_a(void *km, int32_t n_u, uint64_t *u, int32_t n_v, i
 // Compute chaining score between two anchors
 static inline int32_t comput_sc(const mb_anchor_t *ai, const mb_anchor_t *aj, int32_t max_dist_x, int32_t max_dist_y, int32_t bw, float chn_pen_gap)
 {
-	int64_t dq = ai->qpos - aj->qpos, dr, dd, dg, q_span, sc;
-	if (dq <= 0 || dq > max_dist_x + ai->len) return INT32_MIN;
+	int64_t dq = ai->qpos - aj->qpos, dr, dd, dg, sc;
+	if (dq <= 0 || dq > max_dist_y + ai->len) return INT32_MIN;
 	// Check if on same target; use tid for comparison
 	if (ai->sid != aj->sid) return INT32_MIN;
 	dr = ai->tpos - aj->tpos;
-	if (dr <= 0 || dq > max_dist_y + ai->len) return INT32_MIN;
+	if (dr <= 0 || dq > max_dist_x + ai->len) return INT32_MIN;
 	dd = dr > dq? dr - dq : dq - dr;
 	if (dd > bw) return INT32_MIN;
-	if (dr > max_dist_y + ai->len) return INT32_MIN;
 	dg = dr < dq? dr : dq;
 	// Use successor span for variable-length anchors (SMEMs)
-	q_span = ai->len;
-	sc = q_span < dg? q_span : dg;
-	if (dd || dg > q_span) {
+	sc = ai->len < dg? ai->len : dg;
+	if (dd) { // with a gap
 		float lin_pen, log_pen;
 		lin_pen = chn_pen_gap * (float)dd;
 		log_pen = dd >= 1? mb_log2(dd + 1) : 0.0f;
@@ -176,9 +174,9 @@ mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int 
 	}
 	if (max_dist_x < bw) max_dist_x = bw;
 	if (max_dist_y < bw) max_dist_y = bw;
+	v = Kmalloc(km, int32_t, n);
 	p = Kmalloc(km, int64_t, n);
 	f = Kmalloc(km, int32_t, n);
-	v = Kmalloc(km, int32_t, n);
 	t = Kcalloc(km, int32_t, n);
 
 	// fill the score and backtrack arrays
@@ -204,7 +202,7 @@ mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int 
 		end_j = j;
 		if (max_ii < 0 || a[i].tpos - a[max_ii].tpos > max_dist_x + a[i].len) {
 			int32_t max = INT32_MIN;
-			max_ii = -1;
+			max_ii = -1; // the index of the best score. Rescue in case the best is missed due to the max_skip heuristic
 			for (j = i - 1; j >= st; --j)
 				if (max < f[j]) max = f[j], max_ii = j;
 		}
@@ -223,7 +221,7 @@ mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int 
 
 	u = mb_chain_backtrack(km, n, f, p, v, t, min_sc, max_drop, &n_u, &n_v);
 	*n_u_ = n_u, *_u = u; // NB: note that u[] may not be sorted by score here
-	kfree(km, p); kfree(km, f); kfree(km, t);
+	kfree(km, t); kfree(km, f); kfree(km, p);
 	if (n_u == 0) {
 		kfree(km, a); kfree(km, v);
 		return 0;
