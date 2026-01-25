@@ -123,6 +123,7 @@ static void mb_pair_hits(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_
 		mb_hit_t *hi = &hit[pi->y&1][pi->y>>2];
 		for (r = 0; r < 2; ++r) {
 			int which, dir = r << 1 | (pi->y>>1&1);
+			//fprintf(stderr, "what: pes[%d].failed=%d\n", dir, pes[dir].failed);
 			if (pes[dir].failed) continue; // invalid orientation
 			which = r << 1 | ((pi->y&1) ^ 1);
 			if (y[which] < 0) continue; // no previous hit
@@ -190,6 +191,14 @@ static void mb_matesw_align(void *km, const mb_opt_t *opt, int32_t qlen, uint8_t
 		rst = ksw_ll_u8_core(qp, tlen, tseq, gapo, gape, xtra);
 	else
 		rst = ksw_ll_i16_core(qp, tlen, tseq, gapo, gape, xtra);
+	if (kom_dbg_flag & MB_DBG_ALN_PE) {
+		int i;
+		fprintf(stderr, "===> qlen=%d; tlen=%d; score=%d; qe=%d; te=%d <===\n", qlen, tlen, rst.score, rst.qe, rst.te);
+		for (i = 0; i < qlen; ++i) fputc("ACGTN"[qseq[i]], stderr);
+		fputc('\n', stderr);
+		for (i = 0; i < tlen; ++i) fputc("ACGTN"[tseq[i]], stderr);
+		fputc('\n', stderr);
+	}
 	kfree(km, qp);
 	if (rst.score * opt->a >= opt->min_dp_max) {
 		int32_t te = rst.te + 1, qe = rst.qe + 1;
@@ -197,6 +206,8 @@ static void mb_matesw_align(void *km, const mb_opt_t *opt, int32_t qlen, uint8_t
 		mb_seq_rev(te, tseq);
 		ksw_gen_ts_mat(5, mat, opt->a, opt->b, opt->b_ts, opt->b_ambi);
 		ksw_extz2_sse(km, qe, qseq, te, tseq, 5, mat, opt->q, opt->e, opt->bw, opt->zdrop, opt->end_bonus, KSW_EZ_EXTZ_ONLY|KSW_EZ_RIGHT|KSW_EZ_REV_CIGAR, ez);
+		mb_seq_rev(qe, qseq);
+		mb_seq_rev(te, tseq);
 		if (ez->n_cigar > 0 && ez->max >= opt->min_dp_max) {
 			mb_append_cigar(h, ez->n_cigar, ez->cigar);
 			h->qe = qe, h->te = te;
@@ -209,10 +220,7 @@ static void mb_matesw_align(void *km, const mb_opt_t *opt, int32_t qlen, uint8_t
 			h->subsc = rst.score2;
 			h->cnt = 0, h->as = -1;
 			h->parent = MB_PARENT_UNSET;
-			kfree(km, ez->cigar);
 		}
-		mb_seq_rev(qe, qseq);
-		mb_seq_rev(te, tseq);
 	}
 }
 
@@ -221,23 +229,24 @@ typedef struct {
 	mb_hit_t *a;
 } mb_hit_v;
 
-static void mb_matesw_core(void *km, const mb_opt_t *opt, const l2b_t *l2b, const mb_pestat_t pes[4], const mb_hit_t *h0, int32_t len, uint8_t *seq[2], mb_hit_v *h1, ksw_extz_t *ez)
+static void mb_matesw_core(void *km, const mb_opt_t *opt, const l2b_t *l2b, const mb_pestat_t pes[4], const mb_hit_t *h0, int32_t r0, int32_t len, uint8_t *seq[2], mb_hit_v *h1, ksw_extz_t *ez)
 {
-	int32_t r, skip[4];
+	int32_t dir, skip[4];
 	int64_t pos5;
 	// find permitted orientation
-	for (r = 0; r < 4; ++r) skip[r] = !!pes[r].failed;
+	for (dir = 0; dir < 4; ++dir) skip[dir] = !!pes[dir].failed;
 	if (skip[0] + skip[1] + skip[2] + skip[3] == 4) return; // no need to perform SW
 	// perform SW
 	pos5 = h0->rev? h0->te : h0->ts;
-	for (r = 0; r < 4; ++r) {
-		int is_rev, is_large;
+	for (dir = 0; dir < 4; ++dir) {
+		int is_rev, is_larger;
 		int64_t ts, te;
-		if (skip[r]) continue;
-		is_rev = (r>>1 != (r&1)); // whether to reverse complement the mate
-		is_large = !(r>>1); // whether the mate has larger coordinate
-		ts = (is_large? pos5 + pes[r].lo : pos5 - pes[r].hi) - (!is_rev? 0 : len);
-		te = (is_large? pos5 + pes[r].hi : pos5 - pes[r].lo) + (!is_rev? len : 0);
+		if (skip[dir]) continue;
+		is_rev = (dir>>1 != (dir&1)) ^ h0->rev; // whether to reverse complement the mate
+		if (dir>>1 != (dir&1)) is_larger = dir>>1 ^ is_rev; // whether the mate has larger coordinate (FR or RF)
+		else is_larger = dir>>1 ^ r0 ^ h0->rev; // FF or RR
+		ts = (is_larger? pos5 + pes[dir].lo : pos5 - pes[dir].hi) - (!is_rev? 0 : len);
+		te = (is_larger? pos5 + pes[dir].hi : pos5 - pes[dir].lo) + (!is_rev? len : 0);
 		if (ts < 0) ts = 0;
 		if (te > l2b->ctg[h0->tid].len) te = l2b->ctg[h0->tid].len;
 		if (te - ts > len) {
@@ -278,14 +287,14 @@ static int32_t mb_matesw(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_
 			rng ^= hit[r][i].hash, max[r] = max[r] > hit[r][i].p->dp_max? max[r] : hit[r][i].p->dp_max;
 	for (r = 0, n_res = 0; r < 2; ++r)
 		for (i = 0; i < n_hit[r]; ++i)
-			if (hit[r][i].pp == 0 && hit[r][i].p->dp_max >= max[r] - opt->pen_unpair)
+			if (1 || (hit[r][i].pp == 0 && hit[r][i].p->dp_max >= max[r] - opt->pen_unpair))
 				++n_res;
 	if (n_res == 0) return 0; // nothing to rescue
 	if (n_res > opt->max_rescue) n_res = opt->max_rescue;
 	a = Kcalloc(km, uint64_t, n_res);
 	for (r = j = 0; r < 2; ++r) { // candidates for rescue
 		for (i = 0; i < n_hit[r]; ++i) {
-			if (hit[r][i].pp == 0 && hit[r][i].p->dp_max >= max[r] - opt->pen_unpair) { // reservior sampling
+			if (1 || (hit[r][i].pp == 0 && hit[r][i].p->dp_max >= max[r] - opt->pen_unpair)) { // reservior sampling
 				int32_t y;
 				y = j++ < n_res? j - 1 : (int32_t)(j * kom_u64todbl(kom_splitmix64(&rng)));
 				if (y < n_res) a[y] = (uint64_t)r << 32 | i;
@@ -303,7 +312,7 @@ static int32_t mb_matesw(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_
 		for (i = 0; i < qlen[r]; ++i) {
 			int32_t c = kom_nt4_table[(uint8_t)qseq[r][i]];
 			qs[r][0][i] = c;
-			qs[r][1][qlen[r] - 1 - r] = c < 4? 3 - c : 4;
+			qs[r][1][qlen[r] - 1 - i] = c < 4? 3 - c : 4;
 		}
 	}
 
@@ -313,7 +322,7 @@ static int32_t mb_matesw(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_
 	ez.cigar = Kmalloc(km, uint32_t, ez.m_cigar);
 	for (i = 0; i < n_res; ++i) {
 		int32_t r = a[i]>>32&1, j = (int32_t)a[i];
-		mb_matesw_core(km, opt, l2b, pes, &hit[r][j], qlen[!r], qs[!r], &ha[!r], &ez);
+		mb_matesw_core(km, opt, l2b, pes, &ha[r].a[j], r, qlen[!r], qs[!r], &ha[!r], &ez);
 	}
 	for (r = 0; r < 2; ++r)
 		n_hit[r] = ha[r].n, hit[r] = ha[r].a;
@@ -329,6 +338,7 @@ void mb_pair(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], 
 	mb_pairaux_t paux;
 	mb_pair_hits(km, opt, l2b, n_hit, hit, pes, &paux);
 	if (opt->max_rescue > 0) {
+		fprintf(stderr, "here: %d\n", paux.score);
 		if (mb_matesw(km, opt, l2b, n_hit, hit, pes, qlen, qseq) > 0)
 			mb_pair_hits(km, opt, l2b, n_hit, hit, pes, &paux); // pair again if new hits rescued
 	}

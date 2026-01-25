@@ -10,6 +10,7 @@
 #define MB_DBG_ANCHOR      (0x2LL)
 #define MB_DBG_SEED        (0x4LL)
 #define MB_DBG_QNAME       (0x8LL)
+#define MB_DBG_ALN_PE      (0x10LL)
 
 #define MB_SEED_LONG_JOIN  0x1
 #define MB_SEED_IGNORE     0x2

@@ -15,9 +15,9 @@ void mb_opt_init(mb_opt_t *opt)
 	opt->mask_level = 0.5f;
 	opt->mask_len = 0x7fffffff;
 	// alignment options
-	opt->a = 2,  opt->b = 7;
-	opt->q = 13, opt->q2 = 34;
-	opt->e = 3,  opt->e2 = 1;
+	opt->a = 2,  opt->b = 8;
+	opt->q = 12, opt->q2 = 23;
+	opt->e = 2,  opt->e2 = 1;
 	opt->b_ambi = 1;
 	opt->zdrop = 400;
 	opt->zdrop_inv = 200;
@@ -42,6 +42,7 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 	if (strcmp(preset, "sr") == 0) {
 		opt->flag |= MB_F_PE;
 		opt->min_len = 19;
+		opt->min_dp_max = 60;
 		opt->bw = opt->bw_long = 150;
 		opt->max_gap = 150;
 		opt->pri_ratio = 0.5f;
@@ -54,6 +55,7 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 		opt->flag |= MB_F_LONG;
 		opt->flag &= ~MB_F_PE;
 		opt->min_len = 23;
+		opt->min_dp_max = 100;
 		opt->bw = 500, opt->bw_long = 20000;
 		opt->max_gap = 5000;
 		opt->pri_ratio = 0.8f;
