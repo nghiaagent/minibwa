@@ -335,12 +335,13 @@ static int32_t mb_matesw(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_
 
 void mb_pair(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], mb_hit_t *hit[2], const mb_pestat_t pes[4], int32_t qlen[2], char *const qseq[2])
 {
-	int32_t r, i, score_se;
+	int32_t r, i, score_se, do_matesw;
 	mb_pairaux_t paux;
 	mb_hit_t *h[2];
 
 	mb_pair_hits(km, opt, l2b, n_hit, hit, pes, &paux);
-	if (opt->max_rescue > 0) {
+	do_matesw = paux.n_pp > 0 && paux.score == paux.sub_sc? 0 : 1; // skip mate rescue if we see two equally best pairs
+	if (do_matesw && opt->max_rescue > 0) {
 		int32_t sub_diff = opt->a + opt->b > opt->q + opt->e? opt->a + opt->b : opt->q + opt->e;
 		if (mb_matesw(km, opt, l2b, n_hit, hit, pes, qlen, qseq) > 0) {
 			for (r = 0; r < 2; ++r) {
@@ -369,7 +370,7 @@ void mb_pair(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], 
 		identity = (double)(h[0]->mlen + h[1]->mlen) / (h[0]->blen + h[1]->blen);
 		if ((h[0]->id != h[0]->parent || h[1]->id != h[1]->parent) && score2 < score_se - opt->pen_unpair * opt->a)
 			score2 = score_se - opt->pen_unpair * opt->a;
-		mapq_pe = (int)(6.02 * identity * identity * (paux.score - score2) / opt->a - 4.343f * log(paux.n_sub + 1) + .499);
+		mapq_pe = (int)(6.02 * identity * identity * (paux.score - score2) / opt->a - 4.343 * log(paux.n_sub + 1) + .499);
 		mapq_pe = (int)(mapq_pe * (1. - .5 * (h[0]->frac_high / 255. + h[1]->frac_high / 255.)) + .499);
 		if (mapq_pe > 60) mapq_pe = 60;
 		if (mapq_pe == 0 && paux.score > score2) mapq_pe = 1;
