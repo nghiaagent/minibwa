@@ -144,7 +144,7 @@ static void mb_pair_hits(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_
 				if (n_pp == m_pp) Kgrow(km, mb128_t, pp, n_pp, m_pp);
 				q = &pp[n_pp++];
 				q->y = (pk->y&1) == 0? (uint64_t)(pk->y>>2) << 32 | (pi->y>>2) : (uint64_t)(pi->y>>2) << 32 | (pk->y>>2); // upper bits: index to read[0]
-				q->x = (uint64_t)(s + .499) << 32 | ((hk->hash ^ hi->hash) & 0xffffffffULL);
+				q->x = (uint64_t)(s + .499) << 32 | (hk->hash ^ hi->hash);
 			}
 		}
 		y[pi->y&3] = i;
@@ -284,52 +284,69 @@ static void mb_matesw_core(void *km, const mb_opt_t *opt, const l2b_t *l2b, cons
 
 static int32_t mb_matesw(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], mb_hit_t *hit[2], const mb_pestat_t pes[4], int32_t qlen[2], char *const qseq[2])
 {
-	int32_t r, n_add;
+	int32_t i, r, n_add, n_res;
 	mb_hit_v ha[2];
 	ksw_extz_t ez;
+	mb128_t *a;
+	uint8_t *qs[2][2];
 	if (opt->max_rescue == 0) return 0;
+	// precalculate the number of rescue candidates
+	for (r = 0, n_res = 0; r < 2; ++r) {
+		const mb_hit_t *h0 = hit[r];
+		int32_t max, m, n = n_hit[r];
+		if (n == 0) continue;
+		max = h0[0].p->dp_max;
+		for (i = 0, m = 0; i < n && m < opt->max_rescue; ++i)
+			if (h0[i].proper_pair == 0 && h0[i].p->dp_max >= max - opt->pen_unpair * opt->a)
+				++m;
+		n_res += m;
+	}
+	if (n_res == 0) return 0;
+	// collect rescue candidates; must sync with the loop above
+	a = Kcalloc(km, mb128_t, n_res);
+	for (r = 0, n_res = 0; r < 2; ++r) {
+		const mb_hit_t *h0 = hit[r];
+		int32_t max, m, n = n_hit[r];
+		if (n == 0) continue;
+		max = h0[0].p->dp_max;
+		for (i = 0, m = 0; i < n && m < opt->max_rescue; ++i) {
+			if (h0[i].proper_pair == 0 && h0[i].p->dp_max >= max - opt->pen_unpair * opt->a) {
+				mb128_t *p = &a[n_res++];
+				p->x = (uint64_t)h0[i].p->dp_max << 32 | h0[i].hash;
+				p->y = i << 1 | r;
+				++m;
+			}
+		}
+	}
+	radix_sort_mb128x(a, a + n_res);
+	// prepare sequences for alignment
+	qs[0][0] = Kcalloc(km, uint8_t, (qlen[0] + qlen[1]) * 2);
+	qs[0][1] = qs[0][0] + qlen[0];
+	qs[1][0] = qs[0][1] + qlen[0];
+	qs[1][1] = qs[1][0] + qlen[1];
 	for (r = 0; r < 2; ++r) {
 		ha[r].n = ha[r].m = n_hit[r];
 		ha[r].a = hit[r];
-	}
-	memset(&ez, 0, sizeof(ez));
-	ez.m_cigar = 8;
-	ez.cigar = Kmalloc(km, uint32_t, ez.m_cigar);
-	for (r = 0; r < 2; ++r) {
-		const mb_hit_t *h0 = ha[r].a; // don't use h0 = hit[r] because hit[1] may be reallocated in the last round
-		int32_t max, n = n_hit[r]; // don't use n = ha[r].n because we want the original size
-		int32_t n_res, i, k, *a;
-		uint8_t *qs[2];
-		if (n == 0) continue;
-		// precalculate the number of rescue candidates
-		max = h0[0].p->dp_max;
-		for (i = 0, n_res = 0; i < n; ++i)
-			if (h0[i].proper_pair == 0 && h0[i].p->dp_max >= max - opt->pen_unpair * opt->a)
-				++n_res;
-		if (n_res == 0) continue;
-		if (n_res > opt->max_rescue) n_res = opt->max_rescue;
-		// collect rescue candidates; assuming hits are sorted from the best to the worst
-		a = Kcalloc(km, int32_t, n_res);
-		for (i = 0, k = 0; i < n && k < n_res; ++i)
-			if (h0[i].proper_pair == 0 && h0[i].p->dp_max >= max - opt->pen_unpair * opt->a)
-				a[k++] = i;
-		// prepare sequence and do alignment
-		qs[0] = Kcalloc(km, uint8_t, qlen[!r] * 2); // sequence of the MATE of r
-		qs[1] = qs[0] + qlen[!r];
-		for (i = 0; i < qlen[!r]; ++i) {
-			int32_t c = kom_nt4_table[(uint8_t)qseq[!r][i]];
-			qs[0][i] = c;
-			qs[1][qlen[!r] - 1 - i] = c < 4? 3 - c : 4;
+		for (i = 0; i < qlen[r]; ++i) {
+			int32_t c = kom_nt4_table[(uint8_t)qseq[r][i]];
+			qs[r][0][i] = c;
+			qs[r][1][qlen[r] - 1 - i] = c < 4? 3 - c : 4;
 		}
-		for (i = 0; i < n_res; ++i) // do alignment
-			mb_matesw_core(km, opt, l2b, pes, &ha[r].a[a[i]], r, qlen[!r], qs, &ha[!r], &ez);
-		kfree(km, qs[0]);
-		kfree(km, a);
 	}
+	// do alignment
+	memset(&ez, 0, sizeof(ez));
+	ez.m_cigar = 16;
+	ez.cigar = Kmalloc(km, uint32_t, ez.m_cigar);
+	for (i = n_res - 1; i >= 0; --i) {
+		int32_t r = a[i].y&1, j = a[i].y>>1;
+		mb_matesw_core(km, opt, l2b, pes, &ha[r].a[j], r, qlen[!r], qs[!r], &ha[!r], &ez);
+	}
+	kfree(km, ez.cigar);
+	kfree(km, qs[0][0]);
+	kfree(km, a);
 	n_add = (ha[0].n - n_hit[0]) + (ha[1].n - n_hit[1]);
 	for (r = 0; r < 2; ++r)
 		n_hit[r] = ha[r].n, hit[r] = ha[r].a;
-	kfree(km, ez.cigar);
 	return n_add;
 }
 
