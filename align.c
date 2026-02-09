@@ -85,7 +85,7 @@ static int mm_test_zdrop(void *km, const mb_opt_t *opt, const uint8_t *qseq, con
 		score = ksw_ll_i16(qp, t_len, tseq + pos[0][0], opt->q, opt->e, &q_off, &t_off);
 		kfree(km, qseq2);
 		kfree(km, qp);
-		if (score >= opt->min_chain_score * opt->a && score >= opt->min_dp_max)
+		if (score >= opt->min_chain_score * opt->a && score >= opt->min_dp_max * opt->a)
 			return 2; // there is a potential inversion
 	}
 	return max_zdrop > opt->zdrop? 1 : 0;
@@ -768,7 +768,7 @@ static int mb_align1_inv(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int 
 	kfree(km, qp);
 	mb_seq_rev(ql, qseq);
 	mb_seq_rev(tl, tseq);
-	if (score < opt->min_dp_max) goto end_align1_inv;
+	if (score < opt->min_dp_max * opt->a) goto end_align1_inv;
 	q_off = ql - (q_off + 1), t_off = tl - (t_off + 1);
 	mb_align_pair(km, opt, ql - q_off, qseq + q_off, tl - t_off, tseq + t_off, mat, (int)(opt->bw * 1.5), -1, opt->zdrop, KSW_EZ_EXTZ_ONLY, ez);
 	if (ez->n_cigar == 0) goto end_align1_inv; // should never be here

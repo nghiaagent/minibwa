@@ -151,7 +151,7 @@ static inline int32_t comput_sc(const mb_anchor_t *ai, const mb_anchor_t *aj, in
 }
 
 /* Input:
- *   a[].sid: target sequence ID (rev<<31 | tid)
+ *   a[].sid: target sequence ID (tid<<1|rev)
  *   a[].tpos: target coordinate of the last base
  *   a[].qpos: query coordinate of the last base
  *   a[].len:  seed length (q_span)

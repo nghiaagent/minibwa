@@ -322,7 +322,7 @@ void mb_filter_hits(const mb_opt_t *opt, int qlen, int *n_regs, mb_hit_t *regs)
 		int flt = r->flt;
 		if (r->p) {
 			if (r->mlen < opt->min_chain_score) flt = 1;
-			else if (r->p->dp_max < opt->min_dp_max) flt = 1;
+			else if (r->p->dp_max < opt->min_dp_max * opt->a) flt = 1;
 			if (flt) free(r->p);
 		}
 		if (!flt) {
