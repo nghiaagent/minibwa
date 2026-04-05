@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string.h>
+#include "kommon.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,9 +22,6 @@ void mb_bseq_close(mb_bseq_file_t *fp);
 mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, int with_comment, int frag_mode, int *n_);
 mb_bseq1_t *mb_bseq_read_frag(int n_fp, mb_bseq_file_t **fp, int64_t chunk_size, int with_qual, int with_comment, int *n_);
 int mb_bseq_eof(mb_bseq_file_t *fp);
-
-extern unsigned char mb_nt4_table[256];
-extern unsigned char mb_comp_table[256];
 
 static inline int mb_qname_len(const char *s)
 {
@@ -45,10 +43,10 @@ static inline void mb_revcomp_bseq(mb_bseq1_t *s)
 	int i, t, l = s->l_seq;
 	for (i = 0; i < l>>1; ++i) {
 		t = s->seq[l - i - 1];
-		s->seq[l - i - 1] = mb_comp_table[(uint8_t)s->seq[i]];
-		s->seq[i] = mb_comp_table[t];
+		s->seq[l - i - 1] = kom_comp_table[(uint8_t)s->seq[i]];
+		s->seq[i] = kom_comp_table[t];
 	}
-	if (l&1) s->seq[l>>1] = mb_comp_table[(uint8_t)s->seq[l>>1]];
+	if (l&1) s->seq[l>>1] = kom_comp_table[(uint8_t)s->seq[l>>1]];
 	if (s->qual)
 		for (i = 0; i < l>>1; ++i)
 			t = s->qual[l - i - 1], s->qual[l - i - 1] = s->qual[i], s->qual[i] = t;
