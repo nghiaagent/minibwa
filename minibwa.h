@@ -14,6 +14,9 @@
 #define MB_F_NO_KALLOC        (0x40LL)   // disable kalloc
 #define MB_F_NO_ALN           (0x80LL)   // skip base alignment
 #define MB_F_PE_PREDEF        (0x100LL)  // use predefined PE
+#define MB_F_WRITE_DS         (0x200LL)
+#define MB_F_WRITE_CS         (0x400LL)
+#define MB_F_WRITE_MD         (0x800LL)
 
 #define MB_CIGAR_MATCH      0
 #define MB_CIGAR_INS        1
@@ -80,7 +83,7 @@ typedef struct {
 	int32_t dp_score, dp_max, dp_max2; // DP score; score of the max-scoring segment; score of the best alternate mappings
 	uint32_t n_ambi;                   // number of ambiguous bases;
 	int32_t n_cigar;                   // number of cigar operations in cigar[]
-	uint32_t cigar[];
+	uint32_t cigar[];                  // cs/MD is appended at the end
 } mb_extra_t;
 
 #define MB_PARENT_UNSET   (-1)

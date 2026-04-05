@@ -372,7 +372,6 @@ void mb_bwt_smem_batch(void *km, const mb_bwt_t *bwt, int32_t n, mb_smem_entry_t
 	while (tq.count > 0) {
 		int32_t idx;
 		mb_smem_entry_t *s;
-		mb_sai_t ok[4];
 
 		idx = tq_shift(&tq);
 		s = &a[idx];
@@ -418,6 +417,7 @@ void mb_bwt_smem_batch(void *km, const mb_bwt_t *bwt, int32_t n, mb_smem_entry_t
 				continue; // trigger termination as tq_push() at the end of the loop is skipped
 			} else {
 				int32_t i, c = 3 - (int32_t)s->q[s->i];
+				mb_sai_t ok[4];
 				if (c >= 0) mb_bwt_extend(bwt, &s->p, ok, 0);
 				if (c >= 0 && ok[c].size >= s->min_occ) { // stay in stage 4
 					s->p = ok[c];

@@ -50,6 +50,7 @@ int64_t kom_parse_num(const char *str, char **q);
 void kom_panic(const char *func, const char *msg);
 
 int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...);
+int64_t km_sprintf_lite(void *km, kstring_t *s, const char *fmt, ...);
 
 double kom_cputime(void);
 double kom_realtime(void); // call at the beginning to reset the timer

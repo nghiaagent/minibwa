@@ -274,7 +274,7 @@ static void mb_matesw_align(void *km, const mb_opt_t *opt, int32_t qlen, uint8_t
 				for (i = 0; i < ez->n_cigar; ++i) fprintf(stderr, "%d%c", ez->cigar[i]>>4, MB_CIGAR_STR[ez->cigar[i]&0xf]);
 				fputc('\n', stderr);
 			}
-			mb_update_extra(h, &qseq[h->qs], &tseq[h->ts], mat, opt->q, opt->e, opt->flag&MB_F_EQX, 0);
+			mb_update_extra(km, h, &qseq[h->qs], &tseq[h->ts], mat, opt->q, opt->e, opt->flag, 0);
 		}
 	}
 }

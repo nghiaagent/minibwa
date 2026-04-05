@@ -111,8 +111,6 @@ int ksw_ll_i16(void *q, int tlen, const uint8_t *target, int gapo, int gape, int
  *** Private macros and functions ***
  ************************************/
 
-#define HAVE_KALLOC
-
 #ifdef HAVE_KALLOC
 #include "kalloc.h"
 #else

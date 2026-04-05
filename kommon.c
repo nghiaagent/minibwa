@@ -38,34 +38,40 @@ void kom_panic(const char *func, const char *msg)
  * Fast sprintf *
  ****************/
 
-static inline void str_enlarge(kstring_t *s, int l)
+#ifdef HAVE_KALLOC
+#include "kalloc.h"
+#endif
+
+static inline void str_enlarge(void *km, kstring_t *s, int l)
 {
 	if (s->l + l + 1 > s->m) {
 		s->m = s->l + l + 1;
 		kom_roundup64(s->m);
+#ifdef HAVE_KALLOC
+		s->s = Krealloc(km, char, s->s, s->m);
+#else
 		s->s = kom_realloc(char, s->s, s->m);
+#endif
 	}
 }
 
-static inline void str_copy(kstring_t *s, const char *st, const char *en)
+static inline void str_copy(void *km, kstring_t *s, const char *st, const char *en)
 {
-	str_enlarge(s, en - st);
+	str_enlarge(km, s, en - st);
 	memcpy(&s->s[s->l], st, en - st);
 	s->l += en - st;
 }
 
-int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...)
+int64_t kom_sprintf_lite_core(void *km, kstring_t *s, const char *fmt, va_list ap)
 {
 	char buf[32]; // for integer to string conversion
 	const char *p, *q;
 	int64_t len = 0;
-	va_list ap;
-	va_start(ap, fmt);
 	for (q = p = fmt; *p; ++p) {
 		if (*p == '%') {
 			if (p > q) {
 				len += p - q;
-				if (s) str_copy(s, q, p);
+				if (s) str_copy(km, s, q, p);
 			}
 			++p;
 			if (*p == 'd') {
@@ -77,7 +83,7 @@ int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...)
 				if (c < 0) buf[l++] = '-';
 				len += l;
 				if (s) {
-					str_enlarge(s, l);
+					str_enlarge(km, s, l);
 					for (i = l - 1; i >= 0; --i) s->s[s->l++] = buf[i];
 				}
 			} else if (*p == 'l' && *(p+1) == 'd') {
@@ -90,7 +96,7 @@ int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...)
 				if (c < 0) buf[l++] = '-';
 				len += l;
 				if (s) {
-					str_enlarge(s, l);
+					str_enlarge(km, s, l);
 					for (i = l - 1; i >= 0; --i) s->s[s->l++] = buf[i];
 				}
 				++p;
@@ -101,7 +107,7 @@ int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...)
 				do { buf[l++] = x%10 + '0'; x /= 10; } while (x > 0);
 				len += l;
 				if (s) {
-					str_enlarge(s, l);
+					str_enlarge(km, s, l);
 					for (i = l - 1; i >= 0; --i) s->s[s->l++] = buf[i];
 				}
 			} else if (*p == 's') {
@@ -109,11 +115,11 @@ int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...)
 				int l;
 				l = strlen(r);
 				len += l;
-				if (s) str_copy(s, r, r + l);
+				if (s) str_copy(km, s, r, r + l);
 			} else if (*p == 'c') {
 				++len;
 				if (s) {
-					str_enlarge(s, 1);
+					str_enlarge(km, s, 1);
 					s->s[s->l++] = va_arg(ap, int);
 				}
 			} else {
@@ -125,11 +131,26 @@ int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...)
 	}
 	if (p > q) {
 		len += p - q;
-		if (s) str_copy(s, q, p);
+		if (s) str_copy(km, s, q, p);
 	}
-	va_end(ap);
 	if (s) s->s[s->l] = 0;
 	return len;
+}
+
+int64_t kom_sprintf_lite(kstring_t *s, const char *fmt, ...)
+{
+	int64_t ret;
+	va_list ap;
+	va_start(ap, fmt); ret = kom_sprintf_lite_core(0, s, fmt, ap); va_end(ap);
+	return ret;
+}
+
+int64_t km_sprintf_lite(void *km, kstring_t *s, const char *fmt, ...)
+{
+	int64_t ret;
+	va_list ap;
+	va_start(ap, fmt); ret = kom_sprintf_lite_core(km, s, fmt, ap); va_end(ap);
+	return ret;
 }
 
 /****************

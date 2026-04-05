@@ -8,8 +8,6 @@
 #include "kalloc.h"
 #include "ksw2.h"
 
-
-
 static inline void update_max_zdrop(int32_t score, int i, int j, int32_t *max, int *max_i, int *max_j, int e, int *max_zdrop, int pos[2][2])
 {
 	if (score < *max) {
@@ -217,10 +215,10 @@ static void mm_update_cigar_eqx(mb_hit_t *r, const uint8_t *qseq, const uint8_t 
 	r->p = p;
 }
 
-void mb_update_extra(mb_hit_t *r, const uint8_t *qseq, const uint8_t *tseq, const int8_t *mat, int8_t q, int8_t e, int is_eqx, int log_gap)
+void mb_update_extra(void *km, mb_hit_t *r, const uint8_t *qseq, const uint8_t *tseq, const int8_t *mat, int8_t q, int8_t e, uint64_t opt_flag, int log_gap)
 {
 	uint32_t k, l;
-	int32_t qshift, tshift, toff = 0, qoff = 0;
+	int32_t qshift, tshift, toff = 0, qoff = 0, len4;
 	double s = 0.0, max = 0.0;
 	mb_extra_t *p = r->p;
 	if (p == 0) return;
@@ -263,7 +261,21 @@ void mb_update_extra(mb_hit_t *r, const uint8_t *qseq, const uint8_t *tseq, cons
 	}
 	p->dp_max = (int32_t)(max + .499);
 	assert(qoff == r->qe - r->qs && toff == r->te - r->ts);
-	if (is_eqx) mm_update_cigar_eqx(r, qseq, tseq); // NB: it has to be called here as changes to qseq and tseq are not returned
+	if (opt_flag & MB_F_EQX) mm_update_cigar_eqx(r, qseq, tseq); // NB: it has to be called here as changes to qseq and tseq are not returned
+	if (opt_flag & (MB_F_WRITE_DS|MB_F_WRITE_CS|MB_F_WRITE_MD)) {
+		kstring_t str = {0,0,0};
+		str.m = 256;
+		str.s = kmalloc(km, str.m);
+		if (opt_flag & (MB_F_WRITE_DS|MB_F_WRITE_CS))
+			mb_write_cs_ds_core(km, &str, tseq, qseq, r, !!(opt_flag & MB_F_WRITE_DS));
+		len4 = r->p->n_cigar + sizeof(mb_extra_t)/4 + (str.l + 1 + 3) / 4;
+		if (len4 > r->p->cap) {
+			r->p->cap = len4;
+			r->p = (mb_extra_t*)realloc(r->p, r->p->cap * 4);
+		}
+		memcpy(&r->p->cigar[r->p->n_cigar], str.s, str.l + 1);
+		kfree(km, str.s);
+	}
 }
 
 static void mb_enlarge_cigar(mb_hit_t *r, uint32_t n_cigar) // TODO: this calls the libc realloc()
@@ -720,7 +732,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 	if (r->p) {
 		l2b_getseq(mi->l2b, tid, ts1, te1, tseq);
 		qseq = &qseq0[r->rev][qs1];
-		mb_update_extra(r, qseq, tseq, mat, opt->q, opt->e, opt->flag & MB_F_EQX, !is_sr);
+		mb_update_extra(km, r, qseq, tseq, mat, opt->q, opt->e, opt->flag, !is_sr);
 	}
 
 	kfree(km, tseq);
@@ -775,7 +787,7 @@ static int mb_align1_inv(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int 
 	}
 	r_inv->ts = r1->te + t_off;
 	r_inv->te = r_inv->ts + ez->max_t + 1;
-	mb_update_extra(r_inv, &qseq[q_off], &tseq[t_off], mat, opt->q, opt->e, opt->flag & MB_F_EQX, !!(opt->flag & MB_F_LONG));
+	mb_update_extra(km, r_inv, &qseq[q_off], &tseq[t_off], mat, opt->q, opt->e, opt->flag, !!(opt->flag & MB_F_LONG));
 	ret = 1;
 end_align1_inv:
 	kfree(km, tseq);

@@ -76,13 +76,16 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 void radix_sort_mb64(uint64_t *st, uint64_t *en);
 void radix_sort_mb128x(mb128_t *st, mb128_t *en);
 
+// in cs.c
+void mb_write_cs_ds_core(void *km, kstring_t *s, const uint8_t *tseq, const uint8_t *qseq, const mb_hit_t *r, int is_ds);
+
 // defined in format.c
 void mb_fmt_paf_basic(kstring_t *s, const l2b_t *l2b, int64_t qlen, const mb_hit_t *p, const char *qname);
 
 // defined in align.c
 mb_hit_t *mb_align_skeleton(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, const uint8_t *seq, int *n_regs_, mb_hit_t *regs, mb_anchor_t *a);
 void mb_append_cigar(mb_hit_t *r, uint32_t n_cigar, const uint32_t *cigar);
-void mb_update_extra(mb_hit_t *r, const uint8_t *qseq, const uint8_t *tseq, const int8_t *mat, int8_t q, int8_t e, int is_eqx, int log_gap);
+void mb_update_extra(void *km, mb_hit_t *r, const uint8_t *qseq, const uint8_t *tseq, const int8_t *mat, int8_t q, int8_t e, uint64_t opt_flag, int log_gap);
 
 // defined in pe.c
 void mb_pestat(void *km, const mb_opt_t *opt, int32_t n_seg, const int32_t *seg_off, const int32_t *seg_cnt, const int32_t *n_hit, mb_hit_t *const *hit, mb_pestat_t pes[4]);
