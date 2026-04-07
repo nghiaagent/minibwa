@@ -59,9 +59,7 @@ for seeding, additional heuristics to skip unnecessary mate rescue and reduced
 effort in highly repetitive regions where reads would often be wrongly mapped
 anyway.
 
-.SH COMMANDS AND OPTIONS
-.TP
-.B index
+.SH THE INDEX COMMAND
 .B minibwa index
 .RB [ -p
 .IR prefix ]
@@ -69,11 +67,6 @@ anyway.
 .RB [ -n
 .IR nThreads ]
 .I ref.fa
-
-Index a reference genome in the FASTA format
-
-.B Indexing Options:
-.RS 9
 .TP 10
 .BI -p \ STR
 Prefix of the output index [same as
@@ -86,4 +79,22 @@ algorithm by default which uses over 50 GB for a human genome.
 .BI -t \ INT
 Number of threads for the libsais algorithm [1]. Minibwa needs to be compiled
 with OpenMP to enable this option.
-.RE
+
+.SH THE MAP COMMAND
+.B minibwa map
+.RB [ -x
+.IR preset ]
+.RB [ -t
+.IR nThreads ]
+.I ref.fa
+.I read.fq.gz
+.RI [ read2.fq.gz ]
+.SS Mapping options
+.TP 10
+.B -x \ STR
+Preset:
+.B sr
+for short reads or
+.B lr
+for long reads
+.RB [ sr ]
