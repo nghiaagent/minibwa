@@ -60,6 +60,7 @@ effort in highly repetitive regions where reads would often be wrongly mapped
 anyway.
 
 .SH THE INDEX COMMAND
+.SS Summary
 .B minibwa index
 .RB [ -p
 .IR prefix ]
@@ -67,6 +68,14 @@ anyway.
 .RB [ -n
 .IR nThreads ]
 .I ref.fa
+
+Index a genome in the FASTA format. Generate
+.IR prefix .l2b
+for the genome sequence and
+.IR prefix .mbw
+for the FM-index.
+
+.SS Options
 .TP 10
 .BI -p \ STR
 Prefix of the output index [same as
@@ -81,7 +90,9 @@ Number of threads for the libsais algorithm [1]. Minibwa needs to be compiled
 with OpenMP to enable this option.
 
 .SH THE MAP COMMAND
+.SS Summary
 .B minibwa map
+.RB [ -a ]
 .RB [ -x
 .IR preset ]
 .RB [ -t
@@ -89,6 +100,7 @@ with OpenMP to enable this option.
 .I ref.fa
 .I read.fq.gz
 .RI [ read2.fq.gz ]
+
 .SS Mapping options
 .TP 10
 .B -x \ STR
