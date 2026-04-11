@@ -549,11 +549,10 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 	int32_t max_back = is_sr? 0 : 10; // for long reads, allow up to 10bp "edges" from chain ends
 	int32_t rev = a[r->as].sid&1, as1, cnt1;
 	uint8_t *tseq = 0, *qseq;
-	int32_t i, bw, bw_long, dropped = 0, ksw_flag = 0, qs0, qe0;
+	int32_t i, bw, bw_long, dropped = 0, ksw_flag = 0;
 	int64_t tid = a[r->as].sid >> 1, l;
-	int64_t ts0, te0;
-	int64_t ts, te, ts1, te1;
-	int32_t qs, qe, qs1, qe1;
+	int64_t ts0, te0, ts1, te1, ts, te; // ts0/te0: range of extracted sequence; ts1/te1: range of alignment; ts/te: moving temporary
+	int32_t qs0, qe0, qs1, qe1, qs, qe;
 	int8_t mat[25];
 
 	r2->cnt = 0;
@@ -651,18 +650,33 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 	te1 = ts, qe1 = qs;
 	assert(qs1 >= 0 && ts1 >= 0);
 
-	for (i = 0; i < cnt1; ++i) { // gap filling
+	{ // adding exact match on the first unfiltered anchor
+		te = te1 = a[as1].tpos + 1 - mb_min_int32(a[as1].len>>1, max_back);
+		qe = qe1 = a[as1].qpos + 1 - mb_min_int32(a[as1].len>>1, max_back);
+		assert(te - ts == qe - qs && te >= ts);
+		uint32_t cigar0 = (te - ts) << 4 | MB_CIGAR_MATCH;
+		mb_append_cigar(r, 1, &cigar0);
+		r->p->dp_score += opt->a * (te - ts);
+		ts = te, qs = qe;
+	}
+
+	for (i = 1; i < cnt1; ++i) { // gap filling
 		if ((a[as1+i].flag & MB_SEED_IGNORE) && i != cnt1 - 1) continue;
-		te = a[as1+i].tpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
-		qe = a[as1+i].qpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
-		te1 = te, qe1 = qe;
-		if (cnt1 == 1) {
-			uint32_t cigar0 = (te - ts) << 4 | MB_CIGAR_MATCH;
-			assert(te - ts == qe - qs); // this should be an exact match
-			mb_append_cigar(r, 1, &cigar0);
-			r->p->dp_score += opt->a * (te - ts);
-		} else if (i == cnt1 - 1 || (a[as1+i].flag&MB_SEED_LONG_JOIN) || (qe - qs >= opt->min_ksw_len && te - ts >= opt->min_ksw_len)) { // gap filling
+		te1 = a[as1+i].tpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
+		qe1 = a[as1+i].qpos + 1 - mb_min_int32(a[as1+i].len>>1, max_back);
+		if (i == cnt1 - 1 || (a[as1+i].flag&MB_SEED_LONG_JOIN) || (qe1 - qs >= opt->min_ksw_len && te1 - ts >= opt->min_ksw_len)) { // gap filling
 			int32_t j, bw1 = bw_long, zdrop_code;
+			int64_t d1 = 0; // distance from (qe1,te1) to trim
+			// compute ts and te
+			if (a[as1+i].len > opt->min_len * 2) {
+				d1 = te1 - (a[as1+i].tpos + 1 - a[as1+i].len); // distance to the start of the anchor
+				d1 = d1 < qe1 - qs? d1 : qe1 - qs;
+				d1 = d1 < te1 - ts? d1 : te1 - ts;
+				d1 -= opt->min_len;
+				if (d1 < opt->min_len) d1 = 0;
+			}
+			te = te1 - d1, qe = qe1 - d1;
+			// update bandwidth
 			if (a[as1+i].flag & MB_SEED_LONG_JOIN)
 				bw1 = qe - qs > te - ts? qe - qs : te - ts;
 			// perform alignment
@@ -674,8 +688,8 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 				mb_align_pair(km, opt, qe - qs, qseq, te - ts, tseq, mat, bw1, -1, zdrop_code == 2? opt->zdrop_inv : opt->zdrop, ksw_flag, ez); // second pass: lift approximate
 			if (kom_dbg_flag & MB_DBG_AN_POS) fprintf(stderr, "AD\t%d\t%ld\t%ld\t%d\t%d\t%d\t%d\n", r->as, (long)ts, (long)te, qs, qe, zdrop_code, ez->zdropped);
 			// update CIGAR
-			if (ez->n_cigar > 0)
-				mb_append_cigar(r, ez->n_cigar, ez->cigar);
+			assert(ez->n_cigar > 0);
+			mb_append_cigar(r, ez->n_cigar, ez->cigar);
 			if (ez->zdropped) { // truncated by Z-drop; TODO: sometimes Z-drop kicks in because the next seed placement is wrong. This can be fixed in principle.
 				int32_t mlen, blen;
 				if (!r->p) {
@@ -700,6 +714,12 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 				}
 				break;
 			} else r->p->dp_score += ez->score;
+			if (d1 > 0) {
+				uint32_t cigar0 = d1 << 4 | MB_CIGAR_MATCH;
+				mb_append_cigar(r, 1, &cigar0);
+				r->p->dp_score += opt->a * d1;
+				te = te1, qe = qe1;
+			}
 			ts = te, qs = qe;
 		}
 	}
