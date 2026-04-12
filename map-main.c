@@ -300,6 +300,8 @@ static int usage(FILE *fp, const mb_opt_t *opt)
 	fprintf(fp, "  Mapping:\n");
 	fprintf(fp, "    -k INT           min seed length [%d]\n", opt->min_len);
 	fprintf(fp, "    -c NUM           max seed occurrences [%d]\n", opt->max_occ);
+	fprintf(fp, "    -w NUM           bandwidth [%d]\n", opt->bw);
+	fprintf(fp, "    -W NUM           long bandwidth (for long reads or the adaptive mode) [%d]\n", opt->bw_long);
     fprintf(fp, "    -m INT           min chaining score [%d]\n", opt->min_chain_score);
 	fprintf(fp, "    -p FLOAT         min secondary-to-primary score ratio [%g]\n", opt->pri_ratio);
 	fprintf(fp, "    -N INT           retain at most INT secondary alignments [%d]\n", opt->best_n);
@@ -339,7 +341,7 @@ static inline void yes_or_no(mb_opt_t *opt, uint64_t flag, int long_idx, const c
 
 int main_map(int argc, char *argv[])
 {
-	const char *opt_str = "x:o:k:c:m:p:A:B:b:O:E:t:K:N:PyYR:aUl:";
+	const char *opt_str = "x:o:k:c:m:p:A:B:b:O:E:t:K:N:PyYR:aUl:r:w:W:";
 	int32_t c;
 	mb_idx_t *idx;
 	mb_opt_t mo;
@@ -371,6 +373,8 @@ int main_map(int argc, char *argv[])
 		else if (c == 'A') mo.a = atoi(o.arg);
 		else if (c == 'B') mo.b = atoi(o.arg);
 		else if (c == 'l') mo.max_sr_len = kom_parse_num(o.arg, 0);
+		else if (c == 'w') mo.bw = kom_parse_num(o.arg, 0);
+		else if (c == 'W') mo.bw_long = kom_parse_num(o.arg, 0);
 		else if (c == 'a') mo.flag |= MB_F_SAM;
 		else if (c == 'U') mo.flag |= MB_F_NO_UNMAP;
 		else if (c == 'y') mo.flag |= MB_F_COPY_COMMENT;

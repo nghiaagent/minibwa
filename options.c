@@ -13,6 +13,7 @@ static void mb_opt_reset(mb_opt_t *opt)
 	opt->max_chain_skip = 25;
 	opt->max_chain_iter = 5000;
 	opt->chain_gap_scale = 0.8f;
+	opt->bw_long = 20000;
 	// hit processing options
 	opt->mask_level = 0.5f;
 	opt->mask_len = 0x7fffffff;
@@ -51,7 +52,7 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 		opt->min_len = 19;
 		opt->min_dp_max = 30;
 		opt->flag |= MB_F_ADAP;
-		opt->bw = opt->bw_long = 100;
+		opt->bw = 100;
 		opt->max_gap = 100;
 		opt->pri_ratio = 0.5f;
 		opt->best_n = 101;
@@ -64,7 +65,7 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 		opt->flag &= ~MB_F_PE;
 		opt->min_len = 23;
 		opt->min_dp_max = 50;
-		opt->bw = 500, opt->bw_long = 20000;
+		opt->bw = 500;
 		opt->max_gap = 5000;
 		opt->pri_ratio = 0.8f;
 		opt->best_n = 5;
@@ -92,7 +93,7 @@ void mb_opt_adap(const mb_opt_t *opt0, int32_t len, mb_opt_t *opt)
 	}
 	if (opt0->bw < 500)
 		opt->bw = (int32_t)(500 - (500 - opt0->bw) * b + .499);
-	opt->bw_long = 20000;
+	if (opt->bw_long < opt->bw) opt->bw_long = opt->bw;
 	if (opt0->best_n > 5)
 		opt->best_n = (int32_t)((opt0->best_n - 5) * b + 5 + .499);
 	if (opt0->min_dp_max < 50)
