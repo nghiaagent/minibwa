@@ -274,9 +274,7 @@ static ko_longopt_t long_options[] = {
 	{ "outn",         ko_required_argument, 302 },
 	{ "pe-predef",    ko_optional_argument, 303 },
 	{ "rescue",       ko_required_argument, 304 },
-	{ "ds",           ko_no_argument,       305 },
-	{ "cs",           ko_no_argument,       306 },
-	{ "MD",           ko_no_argument,       307 },
+	{ "base-tag",     ko_optional_argument, 305 },
 	{ "adap",         ko_required_argument, 308 },
 	{ "chain-only",   ko_no_argument,       309 },
 	{ "dbg-aln-seq",  ko_no_argument,       601 },
@@ -316,6 +314,7 @@ static int usage(FILE *fp, const mb_opt_t *opt)
 	fprintf(fp, "    -o FILE          output file name [stdout]\n");
 	fprintf(fp, "    -R STR           SAM read group line in a format like '@RG\\tID:foo\\tSM:bar' []\n");
 	fprintf(fp, "    -U               don't output unmapped reads\n");
+	fprintf(fp, "    --base-tag=STR   output base alignment tag: cs, ds or MD []\n");
 	fprintf(fp, "    --outn=INT       output up to INT secondary alignments [0]\n");
 	fprintf(fp, "    -y               copy FASTA/Q comments to output\n");
 	fprintf(fp, "    -Y               use soft clipping for supplementary alignments\n");
@@ -388,12 +387,14 @@ int main_map(int argc, char *argv[])
 			mo.flag |= MB_F_PE_PREDEF;
 		} else if (c == 304) { // --rescue
 			mo.max_rescue = atoi(o.arg);
-		} else if (c == 305) { // --ds
-			mo.flag |= MB_F_WRITE_DS;
-		} else if (c == 306) { // --cs
-			mo.flag |= MB_F_WRITE_CS;
-		} else if (c == 307) { // --MD
-			mo.flag |= MB_F_WRITE_MD;
+		} else if (c == 305) { // --aln-tag
+			if (o.arg == 0 || strcmp(o.arg, "cs") == 0) mo.flag |= MB_F_WRITE_CS;
+			else if (strcmp(o.arg, "ds") == 0) mo.flag |= MB_F_WRITE_DS;
+			else if (strcmp(o.arg, "MD") == 0 || strcmp(o.arg, "md") == 0) mo.flag |= MB_F_WRITE_MD;
+			else if (kom_verbose >= 2) {
+				mo.flag |= MB_F_WRITE_CS;
+				fprintf(stderr, "[WARNING]\033[1;31m --aln-tag only takes 'cs', 'ds' or 'MD'. Invalid values are assumed to be 'cs'.\033[0m\n");
+			}
 		} else if (c == 308) { // --adap
 			yes_or_no(&mo, MB_F_ADAP, o.longidx, o.arg, 1);
 		} else if (c == 309) { // --chain-only
