@@ -540,7 +540,10 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 	if (kom_dbg_flag & MB_DBG_QNAME) fprintf(stderr, "QN\t%s\n", qname);
 
 	*n_hit_ = 0;
-	if (u->n == 0) return 0;
+	if (u->n == 0) {
+		kfree(b->km, u->a);
+		return 0;
+	}
 	hash  = qname? mb_hash_str(qname) : 0;
 	hash ^= mb_hash64(qlen) + mb_hash64(opt->seed);
 	hash  = mb_hash64(hash);
