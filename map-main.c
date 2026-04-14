@@ -322,7 +322,7 @@ static int usage(FILE *fp, const mb_opt_t *opt)
 	fprintf(fp, "    --outn=INT       output up to INT secondary alignments [0]\n");
 	fprintf(fp, "    -y               copy FASTA/Q comments to output\n");
 	fprintf(fp, "    -Y               use soft clipping for supplementary alignments\n");
-	fprintf(fp, "    -K NUM           process NUM-bp query sequences in a batch [50m]\n");
+	fprintf(fp, "    -K NUM           process NUM-bp query sequences in a batch [100m]\n");
 	fprintf(fp, "    --version        print version number\n");
 	return fp == stdout? 0 : 1;
 }

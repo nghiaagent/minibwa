@@ -61,7 +61,7 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 		opt->end_bonus = 10;
 		opt->min_chain_score = 25;
 		opt->min_ksw_len = 20;
-		opt->mb_size = 50000000;
+		opt->mb_size = 100000000;
 	} else if (strcmp(preset, "lr") == 0) {
 		opt->flag |= MB_F_LONG;
 		opt->flag &= ~MB_F_PE;

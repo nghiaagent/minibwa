@@ -532,7 +532,7 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 	int32_t i, n_hit, hi_cov, is_sr;
 	int32_t sub_diff = opt->a + opt->b > opt->q + opt->e? opt->a + opt->b : opt->q + opt->e;
 	uint64_t *w;
-	float chn_pen_gap;
+	double chn_pen_gap, chain_pri_ratio;
 	mb_anchor_v v = {0,0,0};
 	mb_anchor_t *a;
 	mb_hit_t *hit;
@@ -582,11 +582,22 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 		}
 	}
 
+	// heuristic to adjust chain_pri_ratio
+	chain_pri_ratio = opt->pri_ratio;
+	if (!is_sr && opt->pri_ratio > 0.0) {
+		int32_t best;
+		double r;
+		for (i = 1, best = 0; i < n_hit; ++i)
+			if ((w[i] >> 32) > (w[best] >> 32)) best = i;
+		r = (double)(w[best]>>32) / qlen;
+		if (r < 0.1) chain_pri_ratio = opt->pri_ratio * (1.0 + r / 0.1) * 0.5;
+	}
+
 	// chain ordering
 	hit = mb_gen_hit(b->km, hash, qlen, idx->l2b, n_hit, w, a);
 	kfree(b->km, w);
 	mb_set_parent(b->km, opt->mask_level, opt->mask_len, n_hit, hit, sub_diff, 0);
-	mb_select_sub(b->km, opt->pri_ratio, opt->min_len * 2, opt->best_n, &n_hit, hit);
+	mb_select_sub(b->km, chain_pri_ratio, opt->min_len * 2, opt->best_n, &n_hit, hit);
 
 	// base alignment
 	if (!(opt->flag & MB_F_NO_ALN)) {
