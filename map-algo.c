@@ -455,7 +455,7 @@ static void mb_set_inv_mapq(void *km, int n_regs, mb_hit_t *regs)
 	kfree(km, aux);
 }
 
-void mb_set_mapq(void *km, int n_regs, mb_hit_t *regs, int min_chain_sc, int match_sc, int is_sr)
+void mb_set_mapq(void *km, int32_t qlen, int n_regs, mb_hit_t *regs, int min_chain_sc, int match_sc, int is_sr)
 {
 	const int32_t mapQ_coef_len = 50;
 	const double mapQ_coef_fac = 3.0; // should be log(mapQ_coef_len)), but bwa-mem uses 3.0 due to a bug. Let's match bwa-mem
@@ -468,7 +468,7 @@ void mb_set_mapq(void *km, int n_regs, mb_hit_t *regs, int min_chain_sc, int mat
 			r->mapq = 0;
 		} else if (r->parent == r->id) {
 			int mapq, subsc;
-			double pen_s1 = r->score > 100? 1.0f : 0.01f * r->score;
+			double pen_chn = r->score > qlen * 0.1? 1.0 : 10.0 * r->score / qlen; // penalize chains with few matching bases
 			subsc = r->subsc > min_chain_sc? r->subsc : min_chain_sc;
 			if (r->p && r->p->dp_max2 > 0 && r->p->dp_max > 0) {
 				double x, identity = (double)r->mlen / r->blen;
@@ -478,15 +478,15 @@ void mb_set_mapq(void *km, int n_regs, mb_hit_t *regs, int min_chain_sc, int mat
 					mapq = (int)(6.02 * x * x * (r->p->dp_max - r->p->dp_max2) / match_sc + .499f);
 				} else { // long reads
 					x = (double)r->p->dp_max2 / r->p->dp_max;
-					mapq = (int)(pen_s1 * identity * q_coef * (1.0 - x * x) * log((double)r->p->dp_max / match_sc));
+					mapq = (int)(pen_chn * identity * q_coef * (1.0 - x * x) * log((double)r->p->dp_max / match_sc));
 				}
 			} else {
 				double x = (double)subsc / r->score0;
 				if (r->p) {
 					double identity = (double)r->mlen / r->blen;
-					mapq = (int)(pen_s1 * identity * q_coef * (1.0f - x) * log((double)r->p->dp_max / match_sc));
+					mapq = (int)(pen_chn * identity * q_coef * (1.0f - x) * log((double)r->p->dp_max / match_sc));
 				} else {
-					mapq = (int)(pen_s1 * q_coef * (1.0f - x) * log(r->score));
+					mapq = (int)(pen_chn * q_coef * (1.0f - x) * log(r->score));
 				}
 			}
 			mapq -= (int)(4.343f * log(r->n_sub + 1) + .499f);
@@ -607,7 +607,7 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 		mb_set_sam_pri(n_hit, hit);
 	}
 	for (i = 0; i < n_hit; ++i) hit[i].frac_high = (int32_t)(255. * hi_cov / qlen);
-	mb_set_mapq(b->km, n_hit, hit, opt->min_chain_score, opt->a, is_sr);
+	mb_set_mapq(b->km, qlen, n_hit, hit, opt->min_chain_score, opt->a, is_sr);
 
 	// clean up
 	kfree(b->km, a);

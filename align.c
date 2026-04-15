@@ -819,6 +819,71 @@ static inline mb_hit_t *mb_insert_reg(const mb_hit_t *r, int i, int *n_regs, mb_
 	return regs;
 }
 
+static inline void mb_count_gaps(const mb_hit_t *r, int32_t *n_gap_, int32_t *n_gapo_)
+{
+	uint32_t i;
+	int32_t n_gapo = 0, n_gap = 0;
+	*n_gap_ = *n_gapo_ = -1;
+	if (r->p == 0) return;
+	for (i = 0; i < r->p->n_cigar; ++i) {
+		int32_t op = r->p->cigar[i] & 0xf, len = r->p->cigar[i] >> 4;
+		if (op == MB_CIGAR_INS || op == MB_CIGAR_DEL)
+			++n_gapo, n_gap += len;
+	}
+	*n_gap_ = n_gap, *n_gapo_ = n_gapo;
+}
+
+static double mb_event_identity(const mb_hit_t *r)
+{
+	int32_t n_gap, n_gapo;
+	if (r->p == 0) return -1.0f;
+	mb_count_gaps(r, &n_gap, &n_gapo);
+	return (double)r->mlen / (r->blen + r->p->n_ambi - n_gap + n_gapo);
+}
+
+static int32_t mb_recal_max_dp(const mb_hit_t *r, double b2, int32_t match_sc)
+{
+	uint32_t i;
+	int32_t n_gap = 0, n_mis;
+	double gap_cost = 0.0;
+	if (r->p == 0) return -1;
+	for (i = 0; i < r->p->n_cigar; ++i) {
+		int32_t op = r->p->cigar[i] & 0xf, len = r->p->cigar[i] >> 4;
+		if (op == MB_CIGAR_INS || op == MB_CIGAR_DEL) {
+			gap_cost += b2 + (double)mb_log2(1.0 + len);
+			n_gap += len;
+		}
+	}
+	n_mis = r->blen + r->p->n_ambi - r->mlen - n_gap;
+	return (int32_t)(match_sc * (r->mlen - b2 * n_mis - gap_cost) + .499);
+}
+
+void mb_update_dp_max(int qlen, int n_regs, mb_hit_t *regs, float frac, int a, int b)
+{
+	int32_t max = -1, max2 = -1, i, max_i = -1;
+	double div, b2;
+	if (n_regs < 2) return;
+	for (i = 0; i < n_regs; ++i) {
+		mb_hit_t *r = &regs[i];
+		if (r->p == 0) continue;
+		if (r->p->dp_max > max) max2 = max, max = r->p->dp_max, max_i = i;
+		else if (r->p->dp_max > max2) max2 = r->p->dp_max;
+	}
+	if (max_i < 0 || max < 0 || max2 < 0) return;
+	if (regs[max_i].qe - regs[max_i].qs < (double)qlen * frac) return;
+	if (max2 < (double)max * frac) return;
+	div = 1. - mb_event_identity(&regs[max_i]);
+	if (div < 0.02) div = 0.02;
+	b2 = 0.5 / div; // max value: 25
+	if (b2 * a < b) b2 = (double)a / b;
+	for (i = 0; i < n_regs; ++i) {
+		mb_hit_t *r = &regs[i];
+		if (r->p == 0) continue;
+		r->p->dp_max = mb_recal_max_dp(r, b2, a);
+		if (r->p->dp_max < 0) r->p->dp_max = 0;
+	}
+}
+
 mb_hit_t *mb_align_skeleton(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, const uint8_t *qseq, int *n_regs_, mb_hit_t *regs, mb_anchor_t *a)
 {
 	int32_t i, n_regs = *n_regs_, n_a;
@@ -848,6 +913,10 @@ mb_hit_t *mb_align_skeleton(void *km, const mb_opt_t *opt, const mb_idx_t *mi, i
 	kfree(km, qseq0[0]);
 	kfree(km, ez.cigar);
 	mb_filter_hits(opt, qlen, &n_regs, regs);
+	if (!mb_is_sr_mode(opt, qlen)) {
+		mb_update_dp_max(qlen, n_regs, regs, 0.9, opt->a, opt->b);
+		mb_filter_hits(opt, qlen, &n_regs, regs);
+	}
 	mb_hit_sort(km, &n_regs, regs);
 	*n_regs_ = n_regs;
 	return regs;

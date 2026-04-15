@@ -69,7 +69,7 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 		opt->min_dp_max = 50;
 		opt->bw = 500;
 		opt->max_gap = 5000;
-		opt->pri_ratio = 0.75f;
+		opt->pri_ratio = 0.7f;
 		opt->best_n = 5;
 		opt->end_bonus = -1;
 		opt->min_chain_score = 40;
