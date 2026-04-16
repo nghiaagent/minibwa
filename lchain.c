@@ -164,7 +164,7 @@ mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int 
 						  int64_t n, mb_anchor_t *a, int *n_u_, uint64_t **_u)
 { // TODO: make sure this works when n has more than 32 bits
 	int32_t *f, *t, *v, n_u, n_v, mmax_f = 0, max_drop = bw;
-	int64_t *p, i, j, max_ii, st = 0;
+	int64_t *p, i, j, max_ii;
 	uint64_t *u;
 
 	if (_u) *_u = 0, *n_u_ = 0;
@@ -183,10 +183,9 @@ mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int 
 	for (i = 0, max_ii = -1; i < n; ++i) {
 		int64_t max_j = -1, end_j;
 		int32_t max_f = a[i].len, n_skip = 0;
-		while (st < i && (a[i].sid != a[st].sid || a[i].tpos - a[st].tpos > max_dist_x + a[i].len)) ++st;
-		if (i - st > max_iter) st = i - max_iter;
-		for (j = i - 1; j >= st; --j) {
+		for (j = i - 1; j >= 0 && j >= i - max_iter; --j) {
 			int32_t sc;
+			if (a[i].tpos - a[j].tpos >= max_dist_x + a[i].len) break;
 			sc = comput_sc(&a[i], &a[j], max_dist_x, max_dist_y, bw, chn_pen_gap);
 			if (sc == INT32_MIN) continue;
 			sc += f[j];
@@ -203,7 +202,7 @@ mb_anchor_t *mb_lchain_dp(void *km, int max_dist_x, int max_dist_y, int bw, int 
 		if (max_ii < 0 || a[i].tpos - a[max_ii].tpos > max_dist_x + a[i].len) {
 			int32_t max = INT32_MIN;
 			max_ii = -1; // the index of the best score. Rescue in case the best is missed due to the max_skip heuristic
-			for (j = i - 1; j >= st; --j)
+			for (j = i - 1; j >= end_j && j >= 0; --j)
 				if (max < f[j]) max = f[j], max_ii = j;
 		}
 		if (max_ii >= 0 && max_ii < end_j) {
