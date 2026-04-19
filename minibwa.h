@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define MB_VERSION "0.0-r259-dirty"
+#define MB_VERSION "0.0-r260-dirty"
 
 #define MB_F_SAM              (0x1LL)       // output in the SAM format
 #define MB_F_NO_UNMAP         (0x2LL)       // output unmapped query sequences
@@ -78,6 +78,7 @@ typedef struct {
 	int32_t out_n;    // max number of secondary alignments to output
 	int32_t seed;
 	int64_t mb_size;  // mini-batch size
+	int64_t max_mb_size;
 	int64_t max_sw_mat;
 	int64_t cap_kalloc;
 } mb_opt_t;

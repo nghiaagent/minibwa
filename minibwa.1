@@ -1,4 +1,4 @@
-.TH minibwa 1 "19 April 2026" "minibwa-0.0 (r259)" "Bioinformatics tools"
+.TH minibwa 1 "19 April 2026" "minibwa-0.0 (r260)" "Bioinformatics tools"
 .SH NAME
 .PP
 minibwa - short/long-read alignment against a reference genome
@@ -281,10 +281,15 @@ Copy FASTA/Q comments to output
 .B -Y
 In the SAM output, use soft clipping for supplementary alignments
 .TP
-.B -K \ NUM
+.B -K \fINUM1\fR[,\fINUM2\fR]
 Process
-.BR NUM -bp
-query sequences in a batch [100m]
+.IR NUM1 - NUM2
+bp of query sequences in a batch [100m,1g]. Given enough reads in the input, a
+batch is at least
+.I NUM1
+in size. If there are less than 40000 sequences in the batch, continue to read
+until the size reaches
+.IR NUM2 .
 .TP
 .B --version
 Print version number

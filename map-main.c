@@ -97,6 +97,7 @@ static void worker_for_pe(void *data, long i, int tid)
 
 static void *worker_pipeline(void *shared, int step, void *in)
 {
+	const int min_read_cnt = 40000; // should be smaller than opt->mb_size / (read_len * 2) for typical paired-end reads
 	int i, j, k;
     pipeline_t *p = (pipeline_t*)shared;
 	const mb_opt_t *opt = p->opt;
@@ -107,7 +108,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
         step_t *s;
         s = kom_calloc(step_t, 1);
 		if (p->n_fp > 1) s->seq = mb_bseq_read_frag(p->n_fp, p->fp, p->mb_size, with_qual, with_comment, &s->n_seq);
-		else s->seq = mb_bseq_read(p->fp[0], p->mb_size, with_qual, with_comment, frag_mode, &s->n_seq);
+		else s->seq = mb_bseq_read(p->fp[0], p->mb_size, with_qual, with_comment, frag_mode, min_read_cnt, opt->max_mb_size, &s->n_seq);
 		if (s->seq) {
 			int32_t sb_len, sb_off;
 			s->p = p;
@@ -181,6 +182,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
         step_t *s = (step_t*)in;
 		const mb_idx_t *idx = p->idx;
 		kstring_t out = {0,0,0};
+		int64_t tot_len = 0;
 
 		for (i = 0; i < opt->n_thread; ++i)
 			mb_tbuf_destroy(s->tbuf[i]);
@@ -192,6 +194,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
 			out.l = 0;
 			for (i = seg_st; i < seg_en; ++i) {
 				mb_bseq1_t *t = &s->seq[i];
+				tot_len += t->l_seq;
 				if (s->n_hit[i] > 0) { // the query has at least one hit
 					int32_t n_sec = 0;
 					for (j = 0; j < s->n_hit[i]; ++j) {
@@ -218,7 +221,7 @@ static void *worker_pipeline(void *shared, int step, void *in)
 		free(s->hit); free(s->n_hit); free(s->seq);
 		km_destroy(km);
 		if (kom_verbose >= 3)
-			fprintf(stderr, "[M::%s::%.3f*%.2f] mapped %ld sequences\n", __func__, kom_realtime(), kom_percent_cpu(), (long)s->n_seq);
+			fprintf(stderr, "[M::%s::%.3f*%.2f] mapped %ld bp in %ld sequences\n", __func__, kom_realtime(), kom_percent_cpu(), (long)tot_len, (long)s->n_seq);
 		free(s);
 	}
     return 0;
@@ -315,8 +318,8 @@ static int usage(FILE *fp, const mb_opt_t *opt)
 	fprintf(fp, "  Alignment:\n");
 	fprintf(fp, "    -A INT           matching score [%d]\n", opt->a);
 	fprintf(fp, "    -B INT           mismatching openalty [%d]\n", opt->b);
-	fprintf(fp, "    -O INT[,INT]     gap open penalty [%d,%d]\n", opt->q, opt->q2);
-	fprintf(fp, "    -E INT[,INT]     gap extension penalty [%d,%d]\n", opt->e, opt->e2);
+	fprintf(fp, "    -O INT1[,INT2]   gap open penalty [%d,%d]\n", opt->q, opt->q2);
+	fprintf(fp, "    -E INT1[,INT2]   gap extension penalty [%d,%d]\n", opt->e, opt->e2);
 	fprintf(fp, "    -s INT           suppress alignment with DP score lower than INT*{-A} [%d]\n", opt->min_dp_max);
 	fprintf(fp, "  Paired-end:\n");
 	fprintf(fp, "    -P               skip pairing and mate resuce\n");
@@ -327,7 +330,7 @@ static int usage(FILE *fp, const mb_opt_t *opt)
 	fprintf(fp, "    --outn=INT       output up to INT secondary alignments [0]\n");
 	fprintf(fp, "    -y               copy FASTA/Q comments to output\n");
 	fprintf(fp, "    -Y               use soft clipping for supplementary alignments\n");
-	fprintf(fp, "    -K NUM           process NUM-bp query sequences in a batch [100m]\n");
+	fprintf(fp, "    -K NUM1[,NUM2]   process NUM1-NUM2 bp of query sequences in a batch [100m,1g]\n");
 	fprintf(fp, "    --version        print version number\n");
 	return fp == stdout? 0 : 1;
 }
@@ -391,7 +394,6 @@ int main_map(int argc, char *argv[])
 		else if (c == 's') mo.min_dp_max = atoi(o.arg);
 		else if (c == 'o') fn_out = o.arg;
 		else if (c == 't') mo.n_thread = atoi(o.arg);
-		else if (c == 'K') mo.mb_size = kom_parse_num(o.arg, 0);
 		else if (c == 'R') rg_line = o.arg;
 		else if (c == 301) { // --kalloc
 			yes_or_no(&mo, MB_F_NO_KALLOC, o.longidx, o.arg, 0);
@@ -424,6 +426,11 @@ int main_map(int argc, char *argv[])
 			kom_dbg_flag |= MB_DBG_ALN_PE;
 		} else if (c == 606) { // --dbg-an-pos
 			kom_dbg_flag |= MB_DBG_AN_POS;
+		} else if (c == 'K') {
+			mo.mb_size = mo.max_mb_size = kom_parse_num(o.arg, &s);
+			if (*s == ',') mo.max_mb_size = kom_parse_num(s + 1, &s);
+			if (mo.max_mb_size < mo.mb_size)
+				mo.max_mb_size = mo.mb_size;
 		} else if (c == 'O') {
 			mo.q = mo.q2 = strtol(o.arg, &s, 10);
 			if (*s == ',') mo.q2 = strtol(s + 1, &s, 10);

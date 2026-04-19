@@ -82,7 +82,7 @@ static inline void kseq2bseq(kseq_t *ks, mb_bseq1_t *s, int with_qual, int with_
 	s->l_seq = ks->seq.l;
 }
 
-mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, int with_comment, int frag_mode, int *n_)
+mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, int with_comment, int frag_mode, int min_cnt, int64_t max_chunk_size, int *n_)
 {
 	int64_t size = 0;
 	int ret;
@@ -95,14 +95,20 @@ mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, 
 		size = fp->s.l_seq;
 		memset(&fp->s, 0, sizeof(mb_bseq1_t));
 	}
+	if (max_chunk_size < chunk_size)
+		max_chunk_size = chunk_size;
 	while ((ret = kseq_read(ks)) >= 0) {
+		int32_t to_stop = 0;
 		mb_bseq1_t *s;
 		assert(ks->seq.l <= INT32_MAX);
 		if (a.m == 0) kv_resize(mb_bseq1_t, a, 256);
 		kv_pushp(mb_bseq1_t, a, &s);
 		kseq2bseq(ks, s, with_qual, with_comment);
 		size += s->l_seq;
-		if (chunk_size <= 0 || size >= chunk_size) {
+		if (chunk_size <= 0 || max_chunk_size <= 0) to_stop = 1;
+		else if (size >= max_chunk_size) to_stop = 1;
+		else if (size >= chunk_size && a.n >= min_cnt) to_stop = 1;
+		if (to_stop) {
 			if (frag_mode && a.a[a.n-1].l_seq < CHECK_PAIR_THRES) {
 				while ((ret = kseq_read(ks)) >= 0) {
 					kseq2bseq(ks, &fp->s, with_qual, with_comment);

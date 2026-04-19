@@ -19,7 +19,7 @@ typedef struct {
 
 mb_bseq_file_t *mb_bseq_open(const char *fn);
 void mb_bseq_close(mb_bseq_file_t *fp);
-mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, int with_comment, int frag_mode, int *n_);
+mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, int with_comment, int frag_mode, int min_cnt, int64_t max_chunk_size, int *n_);
 mb_bseq1_t *mb_bseq_read_frag(int n_fp, mb_bseq_file_t **fp, int64_t chunk_size, int with_qual, int with_comment, int *n_);
 int mb_bseq_eof(mb_bseq_file_t *fp);
 
