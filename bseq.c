@@ -104,7 +104,7 @@ mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, 
 		if (a.m == 0) kv_resize(mb_bseq1_t, a, 256);
 		kv_pushp(mb_bseq1_t, a, &s);
 		kseq2bseq(ks, s, with_qual, with_comment);
-		size += s->l_seq;
+		size += ks->seq.l;
 		if (chunk_size <= 0 || max_chunk_size <= 0) to_stop = 1;
 		else if (size >= max_chunk_size) to_stop = 1;
 		else if (size >= chunk_size && a.n >= min_cnt) to_stop = 1;
@@ -112,6 +112,7 @@ mb_bseq1_t *mb_bseq_read(mb_bseq_file_t *fp, int64_t chunk_size, int with_qual, 
 			if (frag_mode && a.a[a.n-1].l_seq < CHECK_PAIR_THRES) {
 				while ((ret = kseq_read(ks)) >= 0) {
 					kseq2bseq(ks, &fp->s, with_qual, with_comment);
+					size += ks->seq.l;
 					if (mb_qname_same(fp->s.name, a.a[a.n-1].name)) {
 						kv_push(mb_bseq1_t, a, fp->s);
 						memset(&fp->s, 0, sizeof(mb_bseq1_t));
