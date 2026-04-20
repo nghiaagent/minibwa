@@ -23,8 +23,6 @@ static void mb_opt_reset(mb_opt_t *opt)
 	opt->q = 12, opt->q2 = 23;
 	opt->e = 2,  opt->e2 = 1;
 	opt->b_ambi = 1;
-	opt->zdrop = 400;
-	opt->zdrop_inv = 200;
 	// pairing options
 	opt->max_pe_ins = 10000;
 	opt->max_rescue = 10;
@@ -61,7 +59,9 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 		opt->flag |= MB_F_ADAP;
 		opt->bw = 100;
 		opt->max_gap = 100;
-		opt->best_n = 101;
+		opt->zdrop = 80;
+		opt->zdrop_inv = 80;
+		opt->best_n = 50;
 		opt->end_bonus = 10;
 		opt->min_chain_score = 25;
 		opt->min_ksw_len = 20;
@@ -73,6 +73,8 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 		opt->min_dp_max = 50;
 		opt->bw = 500;
 		opt->max_gap = 5000;
+		opt->zdrop = 400;
+		opt->zdrop_inv = 240;
 		opt->best_n = 5;
 		opt->end_bonus = -1;
 		opt->min_chain_score = 40;
@@ -100,6 +102,10 @@ void mb_opt_adap(const mb_opt_t *opt0, int32_t len, mb_opt_t *opt)
 		opt->bw = (int32_t)(500 - (500 - opt0->bw) * b + .499);
 	if (opt->bw_long > len * 5) opt->bw_long = len * 5;
 	if (opt->bw_long < opt->bw) opt->bw_long = opt->bw;
+	if (opt0->zdrop < 400)
+		opt->zdrop = (int32_t)(400 - (400 - opt0->zdrop) * b + .499);
+	if (opt0->zdrop_inv < 240)
+		opt->zdrop_inv = (int32_t)(240 - (240 - opt0->zdrop_inv) * b + .499);
 	if (opt0->best_n > 5)
 		opt->best_n = (int32_t)((opt0->best_n - 5) * b + 5 + .499);
 	if (opt0->min_dp_max < 50)
