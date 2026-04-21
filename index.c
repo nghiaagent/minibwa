@@ -187,8 +187,8 @@ int main_index(int argc, char *argv[])
 		else if (c == 'u') sa_bit = atoi(o.arg);
 		else if (c == 's') seed = atol(o.arg);
 	}
-	if (argc - o.ind < 2) {
-		fprintf(stderr, "Usage: minibwa index [options] <in.fasta> <out.prefix>\n");
+	if (argc - o.ind == 0) {
+		fprintf(stderr, "Usage: minibwa index [options] <in.fasta> [out.prefix]\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -s INT    random seed for amibiguous bases [%ld]\n", (unsigned long)seed);
 		fprintf(stderr, "  -u INT    SA sample rate at 1/(1<<INT) [%d]\n", sa_bit);
@@ -200,7 +200,7 @@ int main_index(int argc, char *argv[])
 		return 1;
 	}
 
-	prefix = argv[o.ind+1];
+	prefix = o.ind + 1 < argc? argv[o.ind+1] : argv[o.ind];
 	fn_l2b = kom_calloc(char, strlen(prefix) + 5);
 	strcat(strcpy(fn_l2b, prefix), ".l2b");
 	fn_bwt = kom_calloc(char, strlen(prefix) + 5);

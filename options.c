@@ -5,6 +5,7 @@
 static void mb_opt_reset(mb_opt_t *opt)
 {
 	memset(opt, 0, sizeof(mb_opt_t));
+	opt->min_len = 19;
 	opt->max_sr_len = 325;
 	// seeding options
 	opt->max_sub_occ = 10;
@@ -54,7 +55,6 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 	if (strcmp(preset, "sr") == 0 || strcmp(preset, "adap") == 0) {
 		opt->flag |= MB_F_PE;
 		if (strcmp(preset, "adap") == 0) opt->flag |= MB_F_ADAP;
-		opt->min_len = 19;
 		opt->min_dp_max = 30;
 		opt->flag |= MB_F_ADAP;
 		opt->bw = 100;
@@ -69,7 +69,6 @@ int mb_opt_preset(mb_opt_t *opt, const char *preset)
 	} else if (strcmp(preset, "lr") == 0) {
 		opt->flag |= MB_F_LONG;
 		opt->flag &= ~MB_F_PE;
-		opt->min_len = 23;
 		opt->min_dp_max = 50;
 		opt->bw = 500;
 		opt->max_gap = 5000;

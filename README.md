@@ -43,6 +43,35 @@ make gpl=0       # disable GPL'd code for low-memory BWT construction (no effect
 make mimalloc=0  # disable mimalloc and use the system malloc+kalloc instead
 ```
 
+### Usage
+
+Like bwa-mem, minibwa requires to index the genome before read alignment.
+
+#### Indexing
+
+You can index the reference genome with
+```sh
+minibwa index -t8 ref.fa     # index with 8 CPU threads, using 18N RAM (N is the genome size)
+minibwa index ref.fa prefix  # use a different index prefix instead of ref.fa
+minibwa index -l ref.fa      # use less memory at the cost of performance
+```
+Minibwa generates two files: `ref.fa.l2b` for 2-bit encoded reference genome
+sequences and `ref.fa.mbw` for BWT and sampled suffix array.
+
+#### Mapping
+
+By default, minibwa dynamically changes multiple internal parameters based on
+individual read lengths. It works for both short and accurate long reads.
+```sh
+minibwa map -at8 ref.fa read1.fq read2.fq   # map paired-end reads and output SAM
+minibwa map -t8 ref.fa read.fa.gz           # map single-end or long reads and output PAF
+```
+Note in the default adaptive mode, `-g`/`-w`/`-W`/`-N`/`-m`/`-s` only changes
+the short-read setting; the long-read setting is fixed. This mode is disabled
+with `--adap=no` or when `-x sr` or `-x lr` is specified.
+
+Minibwa does not support spliced alignment and has not been tested for genome alignment.
+
 [zlib]: https://zlib.net/
 [mimalloc]: https://github.com/microsoft/mimalloc
 [libsais]: https://github.com/IlyaGrebnov/libsais

@@ -1,4 +1,4 @@
-.TH minibwa 1 "19 April 2026" "minibwa-0.0 (r260)" "Bioinformatics tools"
+.TH minibwa 1 "21 April 2026" "minibwa-0.0 (r265)" "Bioinformatics tools"
 .SH NAME
 .PP
 minibwa - short/long-read alignment against a reference genome
@@ -9,7 +9,7 @@ minibwa index
 .RB [ -t
 .IR nThreads ]
 .I ref.fa
-.I idxPrefix
+.RI [ idxPrefix ]
 .RE
 
 * Indexing a genome in low memory with the BWT-SW algorithm:
@@ -17,7 +17,7 @@ minibwa index
 minibwa index
 .B -l
 .I ref.fa
-.I idxPrefix
+.RI [ idxPrefix ]
 .RE
 
 * Aligning short paired-end reads to an indexed genome and outputting SAM:
@@ -55,7 +55,7 @@ structural changes anyway.
 .RB [ -t
 .IR nThreads ]
 .I ref.fa
-.I idxPrefix
+.RI [ idxPrefix ]
 
 Index a genome in the FASTA format. Generate
 .IR idxPrefix .l2b
@@ -209,7 +209,7 @@ For short-read alignment. It may give fragmented alignment for typical long read
 .B lr
 For long-read alignment
 .RB ( --pe=no
-.B --long -k23 -m40 -s50 -w500 -g5k -N5
+.B --long -m40 -s50 -w500 -g5k -N5
 .BR -K500m ).
 It may miss highly repetitive alignments for typical short reads.
 .TP
