@@ -347,17 +347,21 @@ void mb_select_sub(void *km, float pri_ratio, int min_diff, int best_n, int *n_,
 {
 	if (pri_ratio > 0.0f && *n_ > 0) {
 		int i, k, n = *n_, n_2nd = 0;
-		for (i = k = 0; i < n; ++i) {
-			int p = r[i].parent, keep = 0;
+		uint8_t *keep = Kcalloc(km, uint8_t, n);
+		for (i = 0; i < n; ++i) {
+			int p = r[i].parent;
 			if (p == i || r[i].inv) {
-				keep = 1;
+				keep[i] = 1;
 			} else if ((r[i].score >= r[p].score * pri_ratio || r[i].score + min_diff >= r[p].score) && n_2nd < best_n) {
 				if (!(r[i].qs == r[p].qs && r[i].qe == r[p].qe && r[i].tid == r[p].tid && r[i].ts == r[p].ts && r[i].te == r[p].te))
-					keep = 1, ++n_2nd;
+					keep[i] = 1, ++n_2nd;
 			}
-			if (keep) r[k++] = r[i];
+		}
+		for (i = k = 0; i < n; ++i) {
+			if (keep[i]) r[k++] = r[i];
 			else if (r[i].p) free(r[i].p); // r->p is libc-allocated; free here before the pointer is lost
 		}
+		kfree(km, keep);
 		if (k != n) mb_sync_hits(km, k, r);
 		*n_ = k;
 	}
