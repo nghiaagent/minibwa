@@ -44,7 +44,6 @@ static int usage(FILE *fp, int is_long)
 		fprintf(fp, "  index      index reference FASTA\n");
 		fprintf(fp, "  map        read alignment\n");
 		fprintf(fp, "  version    print the version number\n");
-		fprintf(fp, "  --help     print this help message\n");
 	}
 	return fp == stdout? 0 : 1;
 }
