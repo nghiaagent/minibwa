@@ -57,8 +57,11 @@ libminibwa.a:$(LOBJS)
 minibwa:libminibwa.a $(MALLOC_O) $(AOBJS) main.o
 		$(CC) $(CFLAGS) $(LDFLAGS) $(MALLOC_O) $(AOBJS) main.o -o $@ -L. -lminibwa $(LIBS)
 
+mbmap-lite:libminibwa.a example.o
+		$(CC) $(CFLAGS) $(LDFLAGS) example.o -o $@ -L. -lminibwa $(LIBS)
+
 clean:
-		rm -fr *.o a.out $(PROG) *~ *.a *.dSYM
+		rm -fr *.o a.out $(PROG) mbmap-lite *~ *.a *.dSYM
 
 depend:
 		(LC_ALL=C; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c *.cpp)
@@ -71,6 +74,7 @@ bseq.o: bseq.h kommon.h kseq.h
 bwt.o: kommon.h kalloc.h bwt.h
 bwtgen.o: QSufSort.h
 cs.o: mbpriv.h minibwa.h l2bit.h bwt.h kommon.h bseq.h kalloc.h
+example.o: minibwa.h kseq.h
 fastmap.o: mbpriv.h minibwa.h l2bit.h bwt.h kommon.h bseq.h ketopt.h kseq.h
 fastmap.o: kalloc.h
 format.o: mbpriv.h minibwa.h l2bit.h bwt.h kommon.h bseq.h

@@ -48,6 +48,16 @@ void mb_idx_destroy(mb_idx_t *idx)
 	free(idx);
 }
 
+const char *mb_idx_ctg_name(const mb_idx_t *idx, int32_t tid)
+{
+	return tid >= 0 && tid < idx->l2b->n_ctg? idx->l2b->ctg[tid].name : 0;
+}
+
+int64_t mb_idx_ctg_len(const mb_idx_t *idx, int32_t tid)
+{
+	return tid >= 0 && tid < idx->l2b->n_ctg? idx->l2b->ctg[tid].len : -1;
+}
+
 /*****************
  * Thread buffer *
  *****************/
@@ -617,17 +627,20 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 	return hit;
 }
 
-mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, const char *seq0, int32_t *n_hit_, mb_tbuf_t *b, const char *qname)
+mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const char *seq0, int32_t *n_hit_, mb_tbuf_t *b0, const char *qname)
 {
 	mb_hit_t *ret;
 	mb_sai_v u = {0,0,0};
+	mb_tbuf_t *b;
 	uint8_t *seq;
-	int64_t i;
+	int32_t i;
+	b = b0? b0 : mb_tbuf_init(1);
 	seq = Kmalloc(b->km, uint8_t, qlen);
 	for (i = 0; i < qlen; ++i)
 		seq[i] = kom_nt4_table[(uint8_t)seq0[i]];
 	mb_seed_intv(b->km, idx->bwt, qlen, seq, opt->min_len, opt->max_sub_occ, &u);
 	ret = mb_map_sai(opt, idx, qlen, seq, &u, n_hit_, b, qname);
 	kfree(b->km, seq);
+	if (b0 == 0) mb_tbuf_destroy(b);
 	return ret;
 }

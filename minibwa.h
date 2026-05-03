@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define MB_VERSION "0.0-r283-dirty"
+#define MB_VERSION "0.0-r284-dirty"
 
 #define MB_F_SAM              (0x1LL)       // output in the SAM format
 #define MB_F_NO_UNMAP         (0x2LL)       // output unmapped query sequences
@@ -123,16 +123,33 @@ extern "C" {
 
 mb_idx_t *mb_idx_load(const char *prefix);
 void mb_idx_destroy(mb_idx_t *idx);
+const char *mb_idx_ctg_name(const mb_idx_t *idx, int32_t tid);
+int64_t mb_idx_ctg_len(const mb_idx_t *idx, int32_t tid);
 
 void mb_opt_init(mb_opt_t *opt);
 int mb_opt_preset(mb_opt_t *opt, const char *preset);
-void mb_opt_adap(const mb_opt_t *opt0, int32_t len, mb_opt_t *opt);
 
 mb_tbuf_t *mb_tbuf_init(int no_kalloc);
 void mb_tbuf_destroy(mb_tbuf_t *b);
 int32_t mb_tbuf_reset(mb_tbuf_t *b, int64_t max_block_size);
 
-mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, const char *seq0, int32_t *n_hit_, mb_tbuf_t *b, const char *qname);
+/**
+ * Align one sequence
+ *
+ * @param opt        options, typically initialized by mb_opt_init()
+ * @param idx        index
+ * @param qlen       query length
+ * @param seq        query sequence, ASCII or 01/2/3 encoded
+ * @param n_hit      (out) number of hits
+ * @param b          thread buffer; can be NULL
+ * @param qname      query name
+ *
+ * @return hit array
+ */
+mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const char *seq, int32_t *n_hit, mb_tbuf_t *b, const char *qname);
+
+// not implemented
+mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq, int32_t *qlen, const char **seq, int32_t is_pe, int32_t *n_hit, mb_tbuf_t *b, const char **qname);
 
 #ifdef __cplusplus
 }

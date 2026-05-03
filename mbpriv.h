@@ -45,6 +45,9 @@ void radix_sort_mb128x(mb128_t *beg, mb128_t *end);
 extern "C" {
 #endif
 
+// defined in options.c
+void mb_opt_adap(const mb_opt_t *opt0, int32_t len, mb_opt_t *opt);
+
 // defined in bwtgen.c
 void mb_bwtgen(const char *fn_pac, const char *fn_bwt, int block_size);
 
