@@ -449,7 +449,7 @@ void mb_pair(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], 
 	h[1] = &hit[1][paux.i[1]];
 	score_se = h[0]->p->dp_max + h[1]->p->dp_max;
 	if (paux.score >= score_se - opt->pen_unpair * opt->a) {
-		int32_t mapq_pe, score2 = paux.sub_sc, s;
+		int32_t mapq_pe, score2 = paux.sub_sc;
 		double identity;
 		mb_sync_high_cov(n_hit[0], hit[0]);
 		mb_sync_high_cov(n_hit[1], hit[1]);
@@ -460,15 +460,27 @@ void mb_pair(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], 
 		mapq_pe = (int)(mapq_pe * (1. - .5 * (h[0]->frac_high / 255. + h[1]->frac_high / 255.)) + .499);
 		if (mapq_pe > 60) mapq_pe = 60;
 		if (mapq_pe == 0 && paux.score > score2) mapq_pe = 1;
-		for (s = 0; s < 2; ++s) {
-			if (h[s]->mapq < mapq_pe)
-				h[s]->mapq = (int32_t)(.2 * h[s]->mapq + .8 * mapq_pe + .499);
-			if (h[s]->id != h[s]->parent) { // then lift to primary and update parent
-				mb_hit_t *p = &hit[s][h[s]->parent];
-				for (i = 0; i < n_hit[s]; ++i)
-					if (hit[s][i].parent == p->id)
-						hit[s][i].parent = h[s]->id;
+		for (r = 0; r < 2; ++r) {
+			if (h[r]->mapq < mapq_pe)
+				h[r]->mapq = (int32_t)(.2 * h[r]->mapq + .8 * mapq_pe + .499);
+			if (h[r]->id != h[r]->parent) { // then lift the paired hit to primary and update parent
+				mb_hit_t *p = &hit[r][h[r]->parent];
+				for (i = 0; i < n_hit[r]; ++i)
+					if (hit[r][i].parent == p->id) // h[r]->parent is always set to h[r]->id
+						hit[r][i].parent = h[r]->id;
 				p->mapq = 0;
+			}
+			for (i = 0; i < n_hit[r]; ++i) { // handle other chimeric hits
+				mb_hit_t *p = &hit[r][i], *q = h[r];
+				if (q != p && p->id == p->parent) { // p is a chimeric hit that is not h[r]
+					int32_t j, ol = p->qe <= q->qs || p->qs >= q->qe? 0 : (p->qe < q->qe? p->qe : q->qe) - (p->qs > q->qs? p->qs : q->qs);
+					if (ol > opt->mask_level * (p->qe - p->qs)) { // if p overlaps with h[r] a lot, make it a secondary hit
+						for (j = 0; j < n_hit[r]; ++j) // FIXME: quadratic time complexity, but almost never an issue on real data
+							if (hit[r][j].parent == p->id)
+								hit[r][j].parent = q->id;
+						p->mapq = 0;
+					}
+				}
 			}
 		}
 	}
