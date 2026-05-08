@@ -543,7 +543,7 @@ static void mb_max_stretch(const mb_hit_t *r, const mb_anchor_t *a, int32_t *as,
 	*as = max_i, *cnt = max_len;
 }
 
-static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, uint8_t *qseq0[2], mb_hit_t *r, mb_hit_t *r2, int n_a, mb_anchor_t *a, ksw_extz_t *ez)
+static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, uint8_t *qseq0[2], l2b_meth_t mt, mb_hit_t *r, mb_hit_t *r2, int n_a, mb_anchor_t *a, ksw_extz_t *ez)
 {
 	int32_t is_sr, max_back, rev = a[r->as].sid&1, as1, cnt1;
 	uint8_t *tseq = 0, *qseq;
@@ -563,6 +563,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 		bw_long = (int)(opt->bw_long * 1.5 + 1.);
 		if (bw_long < bw) bw_long = bw;
 	} else bw_long = bw; // disable long gap in the short-read mode
+	if (r->rev) mt = l2b_meth_rev(mt);
 
 	if (is_sr) {
 		mb_max_stretch(r, a, &as1, &cnt1);
@@ -636,7 +637,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 
 	if (qs > 0 && ts > 0) { // left extension; probably the condition can be changed to "qs > qs0 && ts > ts0"
 		qseq = &qseq0[rev][qs0];
-		l2b_getseq(mi->l2b, tid, ts0, ts, tseq);
+		l2b_getseq_meth(mi->l2b, tid, ts0, ts, mt, tseq);
 		mb_seq_rev(qs - qs0, qseq);
 		mb_seq_rev(ts - ts0, tseq);
 		mb_align_pair(km, opt, qs - qs0, qseq, ts - ts0, tseq, mat, bw, opt->end_bonus, r->split_inv? opt->zdrop_inv : opt->zdrop, ksw_flag|KSW_EZ_EXTZ_ONLY|KSW_EZ_RIGHT|KSW_EZ_REV_CIGAR, ez);
@@ -683,7 +684,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 				bw1 = qe - qs > te - ts? qe - qs : te - ts;
 			// perform alignment
 			qseq = &qseq0[rev][qs];
-			l2b_getseq(mi->l2b, tid, ts, te, tseq);
+			l2b_getseq_meth(mi->l2b, tid, ts, te, mt, tseq);
 			mb_align_pair(km, opt, qe - qs, qseq, te - ts, tseq, mat, bw1, -1, opt->zdrop, ksw_flag|KSW_EZ_APPROX_MAX, ez); // first pass: with approximate Z-drop
 			// test Z-drop and inversion Z-drop
 			if ((zdrop_code = mm_test_zdrop(km, opt, qseq, tseq, ez->n_cigar, ez->cigar, mat, is_sr)) != 0)
@@ -728,7 +729,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 
 	if (!dropped && qe < qe0 && te < te0) { // right extension
 		qseq = &qseq0[rev][qe];
-		l2b_getseq(mi->l2b, tid, te, te0, tseq);
+		l2b_getseq_meth(mi->l2b, tid, te, te0, mt, tseq);
 		mb_align_pair(km, opt, qe0 - qe, qseq, te0 - te, tseq, mat, bw, opt->end_bonus, opt->zdrop, ksw_flag|KSW_EZ_EXTZ_ONLY, ez);
 		if (ez->n_cigar > 0) {
 			mb_append_cigar(r, ez->n_cigar, ez->cigar);
@@ -745,7 +746,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 
 	assert(te1 - ts1 <= te0 - ts0);
 	if (r->p) {
-		l2b_getseq(mi->l2b, tid, ts1, te1, tseq);
+		l2b_getseq_meth(mi->l2b, tid, ts1, te1, mt, tseq);
 		qseq = &qseq0[r->rev][qs1];
 		mb_update_extra(km, r, qseq, tseq, mat, opt->q, opt->e, opt->flag, !is_sr);
 	}
@@ -753,7 +754,7 @@ static void mb_align1(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qle
 	kfree(km, tseq);
 }
 
-static int mb_align1_inv(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, uint8_t *qseq0[2], const mb_hit_t *r1, const mb_hit_t *r2, mb_hit_t *r_inv, ksw_extz_t *ez)
+static int mb_align1_inv(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, uint8_t *qseq0[2], l2b_meth_t mt, const mb_hit_t *r1, const mb_hit_t *r2, mb_hit_t *r_inv, ksw_extz_t *ez)
 { // NB: this doesn't work with the qstrand mode
 	int tl, ql, score, ret = 0, q_off, t_off;
 	uint8_t *tseq, *qseq;
@@ -772,7 +773,8 @@ static int mb_align1_inv(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int 
 
 	ksw_gen_nt4_mat(mat, opt->a, opt->b, opt->b_ts, opt->b_ambi);
 	tseq = (uint8_t*)kmalloc(km, tl);
-	l2b_getseq(mi->l2b, r1->tid, r1->te, r2->ts, tseq);
+	if (!r1->rev) mt = l2b_meth_rev(mt); // TODO: check if this is correct
+	l2b_getseq_meth(mi->l2b, r1->tid, r1->te, r2->ts, mt, tseq);
 	qseq = r1->rev? &qseq0[0][r2->qe] : &qseq0[1][qlen - r2->qs];
 
 	mb_seq_rev(ql, qseq);
@@ -884,7 +886,7 @@ void mb_update_dp_max(int qlen, int n_regs, mb_hit_t *regs, double frac, int a, 
 	}
 }
 
-mb_hit_t *mb_align_skeleton(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, const uint8_t *qseq, int *n_regs_, mb_hit_t *regs, mb_anchor_t *a)
+mb_hit_t *mb_align_skeleton(void *km, const mb_opt_t *opt, const mb_idx_t *mi, int qlen, const uint8_t *qseq, l2b_meth_t mt, int *n_regs_, mb_hit_t *regs, mb_anchor_t *a)
 {
 	int32_t i, n_regs = *n_regs_, n_a;
 	uint8_t *qseq0[2];
@@ -901,10 +903,10 @@ mb_hit_t *mb_align_skeleton(void *km, const mb_opt_t *opt, const mb_idx_t *mi, i
 	memset(&ez, 0, sizeof(ksw_extz_t));
 	for (i = 0; i < n_regs; ++i) {
 		mb_hit_t r2; // only used for inversion
-		mb_align1(km, opt, mi, qlen, qseq0, &regs[i], &r2, n_a, a, &ez);
+		mb_align1(km, opt, mi, qlen, qseq0, mt, &regs[i], &r2, n_a, a, &ez);
 		if (r2.cnt > 0) regs = mb_insert_reg(&r2, i, &n_regs, regs);
 		if (i > 0 && regs[i].split_inv) {
-			if (mb_align1_inv(km, opt, mi, qlen, qseq0, &regs[i-1], &regs[i], &r2, &ez)) {
+			if (mb_align1_inv(km, opt, mi, qlen, qseq0, mt, &regs[i-1], &regs[i], &r2, &ez)) {
 				regs = mb_insert_reg(&r2, i, &n_regs, regs);
 				++i; // skip the inserted INV alignment
 			}

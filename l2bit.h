@@ -56,6 +56,11 @@ static inline void l2b_seq_prefetch(const l2b_t *l2b, int64_t tid, int64_t st)
 		__builtin_prefetch(&l2b->pac[(st + l2b->ctg[tid].off) >> 5]);
 }
 
+static inline l2b_meth_t l2b_meth_rev(l2b_meth_t mt)
+{
+	return mt == L2B_METH_NONE? L2B_METH_NONE : mt == L2B_METH_C2T? L2B_METH_G2A : L2B_METH_C2T;
+}
+
 #ifdef __cplusplus
 }
 #endif
