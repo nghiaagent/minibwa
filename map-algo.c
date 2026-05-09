@@ -652,7 +652,7 @@ mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const c
 	return ret;
 }
 
-mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq, const int32_t *qlen, const char **seq, int32_t is_pe, int32_t *n_hit, mb_tbuf_t *b0, const char **qname)
+mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq, const int32_t *qlen, const char **seq, int32_t *n_hit, mb_tbuf_t *b0, const char **qname)
 {
 	mb_tbuf_t *b;
 	mb_hit_t **hit;
