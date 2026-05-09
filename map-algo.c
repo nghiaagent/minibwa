@@ -659,7 +659,7 @@ mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq,
 	mb_sai_v *sai;
 	uint8_t **seq4;
 	void *km;
-	int32_t i, j, k, sb_st, sb_len, sb_max;
+	int32_t i, j, k, sb_st, sb_len, sb_max, is_pe = !!(opt->flag & MB_F_PE);
 
 	if (n_seq <= 0) return 0;
 	b = b0? b0 : mb_tbuf_init(0);

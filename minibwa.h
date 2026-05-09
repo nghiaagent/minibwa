@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define MB_VERSION "0.0-r307-dirty"
+#define MB_VERSION "0.0-r308-dirty"
 
 #define MB_F_SAM              (0x1LL)       // output in the SAM format
 #define MB_F_NO_UNMAP         (0x2LL)       // output unmapped query sequences
@@ -157,14 +157,13 @@ mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const c
  * @param n_seq      number of sequences
  * @param qlen       query lengths, of size n_seq
  * @param seq        query sequences, ASCII or 01/2/3 encoded, of size n_seq
- * @param is_pe      whether seq represents interleaved paired-end
  * @param n_hit      (out) number of hits, of size n_seq
  * @param b          thread buffer; can be NULL
  * @param qname      query name, of size n_seq
  *
  * @return hits, of size n_seq
  */
-mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq, const int32_t *qlen, const char **seq, int32_t is_pe, int32_t *n_hit, mb_tbuf_t *b, const char **qname);
+mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq, const int32_t *qlen, const char **seq, int32_t *n_hit, mb_tbuf_t *b, const char **qname);
 
 #ifdef __cplusplus
 }

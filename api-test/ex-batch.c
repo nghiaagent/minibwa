@@ -12,7 +12,7 @@ static void process_batch(const mb_opt_t *opt, const mb_idx_t *idx, mb_tbuf_t *t
 	mb_hit_t **hit;
 	int32_t *n_hit, k, i, j;
 	n_hit = (int32_t*)calloc(n_seq, sizeof(int32_t));
-	hit = mb_map_batch(opt, idx, n_seq, qlen, (const char**)seq, 0, n_hit, tbuf, (const char**)name);
+	hit = mb_map_batch(opt, idx, n_seq, qlen, (const char**)seq, n_hit, tbuf, (const char**)name);
 	for (k = 0; k < n_seq; ++k) {
 		for (j = 0; j < n_hit[k]; ++j) {
 			mb_hit_t *h = &hit[k][j];
