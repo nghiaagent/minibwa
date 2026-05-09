@@ -632,7 +632,7 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
  * Public alignment APIs *
  *************************/
 
-mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const char *seq0, int32_t mt, int32_t *n_hit_, mb_tbuf_t *b0, const char *qname)
+mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const char *seq0, int32_t mt0, int32_t *n_hit_, mb_tbuf_t *b0, const char *qname)
 {
 	mb_opt_t opt_adap;
 	mb_hit_t *ret;
@@ -640,6 +640,7 @@ mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const c
 	mb_tbuf_t *b;
 	uint8_t *seq;
 	int32_t i;
+	l2b_meth_t mt = mt0 == 0? L2B_METH_NONE : mt0 == 1? L2B_METH_C2T : L2B_METH_G2A;
 	b = b0? b0 : mb_tbuf_init(1);
 	mb_opt_adap(opt, qlen, &opt_adap);
 	seq = Kmalloc(b->km, uint8_t, qlen);
@@ -693,8 +694,13 @@ mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq,
 			for (k = 0; k < sb_n; ++k) {
 				int32_t idx_k = sb_st + k;
 				mb_opt_t opt_adap;
+				l2b_meth_t mt = L2B_METH_NONE;
 				mb_opt_adap(opt, qlen[idx_k], &opt_adap);
-				hit[idx_k] = mb_map_sai(&opt_adap, idx, qlen[idx_k], seq4[k], L2B_METH_NONE, &sai[k], &n_hit[idx_k], b, qname? qname[idx_k] : 0);
+				if (opt->flag & MB_F_METH) {
+					if (is_pe) mt = (idx_k&1) == 0? L2B_METH_C2T : L2B_METH_G2A;
+					else mt = L2B_METH_C2T;
+				}
+				hit[idx_k] = mb_map_sai(&opt_adap, idx, qlen[idx_k], seq4[k], mt, &sai[k], &n_hit[idx_k], b, qname? qname[idx_k] : 0);
 				kfree(km, seq4[k]);
 			}
 
