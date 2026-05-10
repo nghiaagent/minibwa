@@ -90,6 +90,18 @@ int64_t l2b_getseq_meth(const l2b_t *l2b, int64_t tid, int64_t st, int64_t en, l
 	return len;
 }
 
+void l2b_meth_convert(l2b_meth_t mt, int64_t len, uint8_t *seq)
+{
+	int64_t i;
+	if (mt == L2B_METH_C2T) {
+		for (i = 0; i < len; ++i)
+			if (seq[i] == 1) seq[i] = 3;
+	} else if (mt == L2B_METH_G2A) {
+		for (i = 0; i < len; ++i)
+			if (seq[i] == 2) seq[i] = 0;
+	}
+}
+
 int64_t l2b_getambi(const l2b_t *l2b, int64_t tid, int64_t st, int64_t en, int32_t *n_ambi)
 {
 	int64_t g_beg, g_end, lo, hi, mid, i_st, i_en;

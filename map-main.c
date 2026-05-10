@@ -59,24 +59,21 @@ static void worker_for_se_batch(void *data, long i, int tid)
 		int32_t cnt = s->seg_cnt[s->sb_off[i] + k];
 		for (j = 0; j < cnt; ++j) {
 			const mb_bseq1_t *t = &s->seq[off + j];
+			l2b_meth_t mt = !idx->is_meth? L2B_METH_NONE : (j&1) == 0? L2B_METH_C2T : L2B_METH_G2A;
 			len[p] = t->l_seq;
 			seq[p] = &buf[tot], tot += t->l_seq;
 			for (l = 0; l < t->l_seq; ++l)
 				seq[p][l] = kom_nt4_table[(uint8_t)t->seq[l]];
-			if (idx->is_meth) {
-				if ((j&1) == 0) { // R1: C->T
-					for (l = 0; l < t->l_seq; ++l)
-						if (seq[p][l] == 1) seq[p][l] = 3;
-				} else { // R2: G->A
-					for (l = 0; l < t->l_seq; ++l)
-						if (seq[p][l] == 2) seq[p][l] = 0;
-				}
-			}
+			if (mt != L2B_METH_NONE) l2b_meth_convert(mt, len[p], seq[p]);
 			++p;
 		}
 	}
 	assert(p == n);
 	mb_seed_intv_batch(km, idx->bwt, n, len, seq, opt->min_len, opt->max_sub_occ, sai);
+	kfree(km, seq);
+	kfree(km, len);
+	kfree(km, buf);
+
 	for (k = p = 0; k < s->sb_cnt[i]; ++k) {
 		int32_t off = s->seg_off[s->sb_off[i] + k];
 		int32_t cnt = s->seg_cnt[s->sb_off[i] + k];
@@ -84,15 +81,12 @@ static void worker_for_se_batch(void *data, long i, int tid)
 			const mb_bseq1_t *t = &s->seq[off + j];
 			mb_opt_t opt_adap;
 			l2b_meth_t mt = !idx->is_meth? L2B_METH_NONE : (j&1) == 0? L2B_METH_C2T : L2B_METH_G2A;
-			mb_opt_adap(opt, len[p], &opt_adap);
-			s->hit[off+j] = mb_map_sai(&opt_adap, idx, len[p], seq[p], mt, &sai[p], &s->n_hit[off+j], b, t->name);
+			mb_opt_adap(opt, t->l_seq, &opt_adap);
+			s->hit[off+j] = mb_map_sai(&opt_adap, idx, t->l_seq, t->seq, mt, &sai[p], &s->n_hit[off+j], b, t->name);
 			++p;
 		}
 	}
 	kfree(km, sai);
-	kfree(km, seq);
-	kfree(km, len);
-	kfree(km, buf);
 	mb_tbuf_reset(b, opt->cap_kalloc);
 }
 

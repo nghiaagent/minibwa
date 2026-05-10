@@ -548,7 +548,7 @@ static void mb_dbg_anchor(const mb_idx_t *idx, int qlen, int64_t n, const mb_anc
 	}
 }
 
-mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, const uint8_t *seq, l2b_meth_t mt, mb_sai_v *u, int32_t *n_hit_, mb_tbuf_t *b, const char *qname)
+mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, const char *seq0, l2b_meth_t mt, mb_sai_v *u, int32_t *n_hit_, mb_tbuf_t *b, const char *qname)
 {
 	const int32_t min_rechain_len = 1000;
 	const double min_rechain_ratio = 0.1;
@@ -557,6 +557,7 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 	int32_t sub_diff = opt->a + opt->b > opt->q + opt->e? opt->a + opt->b : opt->q + opt->e;
 	uint64_t *w;
 	double chn_pen_gap;
+	uint8_t *seq;
 	mb_anchor_v v = {0,0,0};
 	mb_anchor_t *a;
 	mb_hit_t *hit;
@@ -571,6 +572,11 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 	hash  = qname? mb_hash_str(qname) : 0;
 	hash ^= mb_hash64(qlen) + mb_hash64(opt->seed);
 	hash  = mb_hash64(hash);
+	seq = kmalloc(b->km, qlen);
+	for (i = 0; i < qlen; ++i)
+		seq[i] = kom_nt4_table[(uint8_t)seq0[i]];
+	if (mt != L2B_METH_NONE) l2b_meth_convert(mt, qlen, seq);
+
 	hi_cov = mb_cal_high_cov(b->km, u->n, u->a, opt->max_occ);
 	is_sr = mb_is_sr_mode(opt, qlen);
 
@@ -624,6 +630,7 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 
 	// clean up
 	kfree(b->km, a);
+	kfree(b->km, seq);
 	*n_hit_ = n_hit;
 	return hit;
 }
@@ -647,8 +654,8 @@ mb_hit_t *mb_map(const mb_opt_t *opt, const mb_idx_t *idx, int32_t qlen, const c
 	for (i = 0; i < qlen; ++i)
 		seq[i] = kom_nt4_table[(uint8_t)seq0[i]];
 	mb_seed_intv(b->km, idx->bwt, qlen, seq, opt->min_len, opt->max_sub_occ, &u);
-	ret = mb_map_sai(&opt_adap, idx, qlen, seq, mt, &u, n_hit_, b, qname);
 	kfree(b->km, seq);
+	ret = mb_map_sai(&opt_adap, idx, qlen, seq0, mt, &u, n_hit_, b, qname);
 	if (b0 == 0) mb_tbuf_destroy(b);
 	return ret;
 }
@@ -689,6 +696,7 @@ mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq,
 			// batch SMEM for sub-batch
 			memset(sai, 0, sb_n * sizeof(mb_sai_v));
 			mb_seed_intv_batch(km, idx->bwt, sb_n, &qlen[sb_st], seq4, opt->min_len, opt->max_sub_occ, sai);
+			for (k = 0; k < sb_n; ++k) kfree(km, seq4[k]);
 
 			// map each sequence in sub-batch
 			for (k = 0; k < sb_n; ++k) {
@@ -700,8 +708,7 @@ mb_hit_t **mb_map_batch(const mb_opt_t *opt, const mb_idx_t *idx, int32_t n_seq,
 					if (is_pe) mt = (idx_k&1) == 0? L2B_METH_C2T : L2B_METH_G2A;
 					else mt = L2B_METH_C2T;
 				}
-				hit[idx_k] = mb_map_sai(&opt_adap, idx, qlen[idx_k], seq4[k], mt, &sai[k], &n_hit[idx_k], b, qname? qname[idx_k] : 0);
-				kfree(km, seq4[k]);
+				hit[idx_k] = mb_map_sai(&opt_adap, idx, qlen[idx_k], seq[idx_k], mt, &sai[k], &n_hit[idx_k], b, qname? qname[idx_k] : 0);
 			}
 
 			sb_st = i;
