@@ -170,18 +170,18 @@ By definition, $B[i]=T[S(i)-1]$.
 \begin{algorithm}[tb]
 	\caption{Backward and forward extension}\label{algo:backfor}
 	\begin{algorithmic}[1]
-		\Procedure{BackExt}{$(k,k',s),a$}
+		\Function{BackwardExt}{$(k,k',s),a$}
 			\ForAll{$b<\overline{a}$}\Comment{$b$ can be $\$$}
 				\State $k'\gets k'+\big[\pi(\overline{b},k+s)-\pi(\overline{b},k)\big]$
 			\EndFor
 			\State $s\gets \pi(a,k+s)-\pi(a,k)$
 			\State $k\gets \pi(a,k)$
 			\State \Return{$(k,k',s)$}
-		\EndProcedure
-		\Procedure{ForExt}{$(k,k',s),a$}
-			\State $(k',k,s)\gets${\sc BackExt}$((k',k,s),\overline{a})$
+		\EndFunction
+		\Function{ForwardExt}{$(k,k',s),a$}
+			\State $(k',k,s)\gets${\sc BackwardExt}$((k',k,s),\overline{a})$
 			\State \Return{$(k,k',s)$}
-		\EndProcedure
+		\EndFunction
 	\end{algorithmic}
 \end{algorithm}
 
@@ -197,15 +197,7 @@ Please see \citet{Li:2024ac} for the proof of this algorithm.
 \begin{algorithm}[tb]
 	\caption{Find $(\ell,c)$-SMEMs in string set $\mathcal{P}$}\label{algo:smem}
 	\begin{algorithmic}[1]
-		\Procedure{BackStep}{$Q,u,P,i,j,(k,k',s),\ell,c$}
-			\State $(l,l',t)\gets${\sc BackExt}$((k,k',s),P[j])$
-			\If{$t\ge c$}
-				\State $Q.{\rm push}(u,P,i,j-1,(l,l',t))$
-			\ElsIf{$j+\ell<|P|$}
-				\State $Q.{\rm push}(1,P,j+1,j+\ell,(0,0,|B|))$
-			\EndIf
-		\EndProcedure
-		\Procedure{FindSMEM}{$\mathcal{P},\ell,c$}
+		\Function{BatchFindSMEM}{$\mathcal{P},\ell,c$}
 			\ForAll{$P\in\mathcal{P}$}\Comment{initialize queue $Q$}
 				\If{$\ell-1<|P|$}
 					\State $Q.{\rm push}(1,P,0,\ell-1,(0,0,|B|))$
@@ -224,7 +216,7 @@ Please see \citet{Li:2024ac} for the proof of this algorithm.
 						\State Output $(P,i,j,(k,k',s))$\Comment{report an SMEM}
 						\State {\bf continue}
 					\EndIf
-					\State $(l,l',t)\gets${\sc ForExt}$((k,k',s),P[j])$
+					\State $(l,l',t)\gets${\sc ForwardExt}$((k,k',s),P[j])$
 					\If{$t\ge c$}\Comment{1-step forward ext.}
 						\State $Q.{\rm push}(2,P,i,j+1,(l,l',t))$
 					\Else\Comment{move to stage 3}
@@ -239,7 +231,38 @@ Please see \citet{Li:2024ac} for the proof of this algorithm.
 					\EndIf
 				\EndIf
 			\EndWhile
-		\EndProcedure
+		\EndFunction
+		\Function{BackStep}{$Q,u,P,i,j,(k,k',s),\ell,c$}\Comment{helper func.}
+			\State $(l,l',t)\gets${\sc BackwardExt}$((k,k',s),P[j])$
+			\If{$t\ge c$}
+				\State $Q.{\rm push}(u,P,i,j-1,(l,l',t))$
+			\ElsIf{$j+\ell<|P|$}
+				\State $Q.{\rm push}(1,P,j+1,j+\ell,(0,0,|B|))$
+			\EndIf
+		\EndFunction
+	\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[tb]
+	\caption{Retrieve chromosomal positions}\label{algo:sa}
+	\begin{algorithmic}[1]
+		\LComment{$S$: suffix array with values only at a multiple of $r$}
+		\LComment{$E$: set of suffix array positions}
+		\Function{BatchLocate}{$S,r,E$}
+			\State $i\gets0; F\gets\emptyset$
+			\While{$E\not=\emptyset$}
+				\State $E'\gets\emptyset$
+				\For{$k\in E$}
+					\If{$k\mod r=0$}\Comment{$k$ is a multiple of $r$}
+						\State $F\gets F\cup\{i+S(k)\}$
+					\Else
+						\State $E'\gets E'\cup\{\pi(B[k],k)\}$
+					\EndIf
+				\EndFor
+				\State $i\gets i+1; E\gets E'$
+			\EndWhile
+			\State \Return $F$\Comment{Set of chromosomal positions}
+		\EndFunction
 	\end{algorithmic}
 \end{algorithm}
 
@@ -252,7 +275,7 @@ blabla
 H.L. conceived the project, implemented the core algorithm, analyzed the data and drafted the manuscript.
 N.H. added new features, contributed to development and reviewed the draft.
 
-%\section*{Conflict of interest}
+\section*{Conflict of interest}
 
 N.H. is an employee of Fulcrum Genomics LLC.
 
