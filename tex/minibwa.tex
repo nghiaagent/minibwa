@@ -146,6 +146,35 @@ and additionally maps accurate long reads and natively supports BS-seq data.
 
 \section{Methods}
 
+In a nutshell, minibwa is a hybrid of BWA-MEM~\citep{Li:2013aa} and minimap2~\citep{Li:2018ab},
+combining BWA-MEM variable-length seeding with minimap2 chaining and SIMD-based alignment.
+It additionally adapts the ropebwt3~\citep{Li:2024ac} algorithm for finding supermaximal exact matches (SMEMs).
+Table~\ref{tab:relation} summarizes the relationship between minibwa and other algorithms.
+BWA-MEM2 also batches suffix array (SA) query and implements SIMD-based alignment.
+Further performance gains in minibwa primarily come from the new SMEM algorithm,
+more frequent use of ungapped alignment and reduced effort in highly repetitive regions such as centromeres.
+
+\begin{table}[b]
+\caption{Relationship with BWA-MEM, ropebwt3 and minimap2\label{tab:relation}}
+\begin{tabular*}{\columnwidth}{@{\extracolsep\fill}lll@{\extracolsep\fill}}
+\toprule
+Component & Source & Modification \\
+\midrule
+FM-index  & BWA-MEM  & Near identical \\
+SMEM      & ropebwt3 & Reimplemented and batched \\
+SA query  & ropebwt3 & Batched differently \\
+Seeding   & BWA-MEM  & Different algorithm \\
+Chaining  & minimap2 & Adapted for variable-length seeds \\
+Alignment & minimap2 & More frequent ungapped fast path \\
+Pairing   & BWA-MEM  & Ungapped fast path \\
+\botrule
+\end{tabular*}
+\end{table}
+
+For the completeness of the method section, we will describe the basic theory on FM-index in brief.
+Additional technical details and explanation can be found in \citet{Li:2024ac}.
+Note that the original BWA paper~\citep{Li:2009uq} used closed intervals but here we are using half-closed-half-open intervals.
+
 \subsection{Definitions}
 
 $\Sigma\triangleq\{{\tt A},{\tt C},{\tt G},{\tt T}\}$ is the DNA alphabet
@@ -162,7 +191,7 @@ $R\in\Sigma^*$ is the reference genome with all contigs concatenated.
 $T\triangleq R\circ\overline{R}\circ\$$ further concatenates $R$ and its reverse complement
 with a trailing \emph{sentinel} $\$$ that is smaller than all symbols in $\Sigma$.
 For convenice, let $n=|T|$ and $T[-1]=T[n-1]=\$$.
-\emph{Suffix array} $S$ is a permutation of integers in $[0,n)$ such that
+The \emph{suffix array} (\emph{SA}) of $T$ is an integer array $S$ where
 $S(i)$ is the position of the $i$-th smallest suffix of $T$.
 $B$ is the \emph{Burrows-Wheeler Transform} (\emph{BWT}) of $T$.
 By definition, $B[i]=T[S(i)-1]$.
@@ -193,6 +222,129 @@ function {\sc BackwardExt()} in Algorithm~\ref{algo:backfor} calculates the ds-i
 and {\sc ForwardExt()} calculates the ds-interval of $Pa$,
 where $\pi(a,k)\triangleq |\{i:B[i]<a\}|+|\{i<k:B[i]=a\}|$ is the LF-mapping.
 Please see \citet{Li:2024ac} for the proof of this algorithm.
+
+4-tuple $(P,i,j,(k,k',s))$ is a $(\ell,c)$-match
+if $(k,k',s)$ is the ds-interval of $P[i,j)$, $j-i\ge\ell$ and $s\ge c$;
+it is a $(\ell,c)$-SMEM if there does not exist another $(\ell,c)$-match $(P[i',j'), (\tilde{k},\tilde{k}',\tilde{s}))$ such that $i'\le i<j\le j'$.
+Intuitively, a $(\ell,c)$-match involves a $P$'s substring that is $\ge\ell$ in length and occurs $\ge c$ times in $T$;
+a $(\ell,c)$-SMEM is a $(\ell,c)$-match that is not contained in other $(\ell,c)$-matches on the query string.
+Section~\ref{sec:smem} will describe the algorithm to find $(\ell,c)$-SMEMs.
+
+\subsection{The memory layout of BWT}
+
+Minibwa and BWA-MEM encode the BWT the same way.
+They split $B$ into blocks.
+In each block, the first four 64-bit integers store the counts of {\tt A}/{\tt C}/{\tt G}/{\tt T} ahead of the block;
+the next four 64-bit integers encode 128bp sequences in $B$ in the 2-bit encoding.
+Each block takes 64 bytes both on disk and in memory.
+When calculating $\pi(a,k)$, minibwa finds the address of the block that contains $B[k]$,
+reads the counts at the beginning of the block and scans the encoded sequences to get the exact count up to $k$.
+The BWT of the human genome takes $\sim$3 GB in RAM and is too large to fit the CPU cache.
+The calculation of most $\pi(a,k)$ incur cache misses.
+
+\subsection{A brief introduction to prefetching}
+
+\begin{figure}[tb]
+\includegraphics[width=\columnwidth]{fig-prefetch.pdf}
+\caption{Example of memory prefetch.
+{\bf (a)} Standard backward search for three 5bp query strings.
+$(r,i)$ denotes query $r$ at its position $i$.
+Black arrows follow the computation order on a CPU.
+Red arrows indicate data access in RAM.
+{\bf (b)} Batched backward search with prefetch.}\label{fig:prefetch}
+\end{figure}
+
+A CPU takes hundreds of CPU cycles to access data in RAM but only several cycles to read data in the L1 cache.
+If the data needed for computing is in RAM, the CPU has to wait for hundreds of CPU cycles before doing actual work.
+Take the standard backward search as a case study.
+With the classical algorithm, we process each query string in serial (Fig.~\ref{fig:prefetch}a).
+Because the backward search at query position $(2,2)$ depends on the result on $(2,3)$,
+the CPU has to wait for hundreds of CPU cycles to fetch data,
+even though the computation itself only takes tens of CPU cycles approximately.
+
+A more efficient approach is to decouple data access and computation by batching query strings (Fig.~\ref{fig:prefetch}b).
+For example, after backward extension at $(2,3)$, we will know the address of data needed for computing $(2,2)$.
+We can prefetch the data at this address, indicated by the red arrow from $(2,3)$ to $(2,2)$, and move onto position $(3,3)$.
+When we come to $(2,2)$ following the black arrows, the data will be ready in cache and the CPU can perform backward extension of $(2,2)$ without waiting for the data.
+This way we keep the CPU busy and effectively hide the latency of accessing data in RAM.
+
+\subsection{Batched locate operation}
+
+Suppose the ds-interval of $P$ is $(k,k',s)$.
+It only gives positions in the SA coordinate.
+To retrieve positions in $T$, we have to use suffix array $S$:
+$\{S(i):k\le i<k+s\}$ is the set of $P$'s positions in $T$.
+To reduce memory with FM-index, we only store $S(i)$ when $i$ is a multiple of parameter $r$.
+The ``locate'' operation finds the positions of $P$ given a sampled suffix array $S$.
+
+Function {\sc LocateSlow()} in Algorithm~\ref{algo:sa} shows the canonical implementation of the locate operation which processes each SA position in turn.
+Line 8 triggers data acess and computation at the same time.
+Function {\sc BatchLocate()} leverages the latency hiding technique.
+Line 20 corresponds to black arrows in Fig.~\ref{fig:prefetch}b where the CPU does work;
+line 21 corresponds to red arrows where prefetch happens.
+Furthermore, when the input set $E$ consists of contiguous integers from a ds-interval,
+line 20 will hit cache often and also greatly reduce cache misses.
+
+To evaluate the performance of the two algorithms in Algorithm~\ref{algo:sa},
+we filled $E$ with 20 random integers in range $[0,n)$.
+On the FM-index of GRCh38, {\sc BatchLocate()} was over four times as fast as {\sc LocateSlow()} with identical output.
+Latency hiding is an effective technique.
+
+\begin{algorithm}[bt]
+	\caption{Retrieve chromosomal positions}\label{algo:sa}
+	\begin{algorithmic}[1]
+		\LComment{$S$: suffix array with values only at a multiple of $r$}
+		\LComment{$E$: set of suffix array positions}
+		\Function{LocateSlow}{$S,r,E$}
+			\State $F\gets\emptyset$
+			\For{$k\in E$}
+				\State $i\gets0$
+				\While{$k\!\!\mod r\not=0$}
+					\State $k\gets\pi(B[k],k)$
+					\State $i\gets i+1$
+				\EndWhile
+				\State $F\gets F\cup\{i+S(k)\}$
+			\EndFor
+			\State \Return $F$\Comment{Set of chromosomal positions}
+		\EndFunction
+		\Function{BatchLocate}{$S,r,E$}
+			\State $i\gets0; F\gets\emptyset$
+			\While{$E\not=\emptyset$}
+				\State $E'\gets\emptyset$
+				\For{$k\in E$}
+					\If{$k\!\!\mod r=0$}\Comment{$k$ is a multiple of $r$}
+						\State $F\gets F\cup\{i+S(k)\}$
+					\Else
+						\State $l\gets\pi(B[k],k)$
+						\State $E'\gets E'\cup\{l\}$
+						\State Prefetch the memory block containing $B[l]$
+					\EndIf
+				\EndFor
+				\State $i\gets i+1; E\gets E'$
+			\EndWhile
+			\State \Return $F$\Comment{Set of chromosomal positions}
+		\EndFunction
+	\end{algorithmic}
+\end{algorithm}
+
+\subsection{Finding SMEMs}\label{sec:smem}
+
+Minibwa uses $(\ell,c)$-SMEMs to seed alignment.
+Generalizing \citet{DBLP:conf/dlt/Gagie24} to the case of $c>1$,
+\citet{Li:2024ac} provides an algorithm to find $(\ell,c)$-SMEMs given one query string.
+This algorithm involves multiple rounds of forward and backward extensions (Algorithm~\ref{algo:backfor}).
+For almost every extension, the CPU has to wait for the result of previous extension and then fetch the needed memory to cache.
+The memory lateny is the bottleneck.
+
+Algorithm~\ref{algo:smem} alleviates this issue by batching query strings.
+Overall, it uses a queue $Q$ to organize operations on all queries in a pipeline.
+Same as the original serial algorithm~\citep{Li:2024ac},
+the batched version tests if $P[i,i+\ell)$ is a match with backward extension (line 7--11 in stage 1).
+If it is not a match, we jump and try again (line 32);
+otherwise, we use forward extension to find the end of the SMEM starting at $i$ (line 12--21 in stage 2).
+A second round of backward extension is applied to find the start of the next SMEM (line 22--26 in stage 3).
+Minibwa prefetches memory blocks containing $B[l]$ and $B[l']$ after line 18 and 30.
+It additionally precomputes the ds-intervals of all 10-mers to reduce the number calls to {\sc BackStep}().
 
 \begin{algorithm}[tb]
 	\caption{Find $(\ell,c)$-SMEMs in string set $\mathcal{P}$}\label{algo:smem}
@@ -243,28 +395,92 @@ Please see \citet{Li:2024ac} for the proof of this algorithm.
 	\end{algorithmic}
 \end{algorithm}
 
-\begin{algorithm}[tb]
-	\caption{Retrieve chromosomal positions}\label{algo:sa}
-	\begin{algorithmic}[1]
-		\LComment{$S$: suffix array with values only at a multiple of $r$}
-		\LComment{$E$: set of suffix array positions}
-		\Function{BatchLocate}{$S,r,E$}
-			\State $i\gets0; F\gets\emptyset$
-			\While{$E\not=\emptyset$}
-				\State $E'\gets\emptyset$
-				\For{$k\in E$}
-					\If{$k\mod r=0$}\Comment{$k$ is a multiple of $r$}
-						\State $F\gets F\cup\{i+S(k)\}$
-					\Else
-						\State $E'\gets E'\cup\{\pi(B[k],k)\}$
-					\EndIf
-				\EndFor
-				\State $i\gets i+1; E\gets E'$
-			\EndWhile
-			\State \Return $F$\Comment{Set of chromosomal positions}
-		\EndFunction
-	\end{algorithmic}
-\end{algorithm}
+BWA-MEM uses an old algorithm to find SMEMs~\citep{Li:2012fk}.
+On real short reads without batching, the minibwa algorithm is 10\% faster to find $(19,1)$-SMEMs due to the 10-mer cache.
+With batching, minibwa is $\sim$2.5 times as fast.
+Minibwa is $\sim$4.6 times as fast as BWA-MEM for finding $(19,2)$-SMEMs.
+The gap is larger because Algorithm~\ref{algo:smem} is more efficient to skip short SMEMs.
+
+\subsection{Seeding, chaining and base alignment}
+
+Minibwa seeds a query sequence $P$ in two rounds.
+It first finds all $(19,1)$-SMEMs.
+Suppose $(P,i,j,(k,k',s))$ is a resulting SMEM.
+If $j-i\ge38$ and $s\le10$,
+minibwa looks for $(\lfloor(j-1)/2\rfloor,s+1)$-SMEMs within $P[i,j)$.
+During early development of BWA-MEM, we tried the same seeding algorithm.
+However, as the old SMEM-finding algorithm is slow for $(19,2)$-SMEMs in the second round,
+we ended up with a different seeding strategy in BWA-MEM.
+
+The chaining algorithm in minibwa is similar to minimap2~\citep{Li:2018ab} except minor adjustment for variable-length seeds.
+This chaining algorithm is more robust than BWA-MEM's heuristic.
+Minibwa uses the same core routines in minimap2 for base alignment.
+In comparison to BWA-MEM, minimap2 and minibwa test ungapped alignment before performing full dynamic programming.
+This speeds up short-read alignment.
+
+\subsection{Paired-end mapping}
+
+Minibwa finds properly paired reads using the same logic as BWA-MEM.
+If a read is mapped but its mate is not mapped nearby,
+minibwa locally maps the mate in a window close to the mapped read.
+On real data, this involves Smith-Waterman alignment~\citep{Smith:1981aa} between a 150bp read and a reference substring of several hundred basepairs in length.
+Unlike BWA-MEM that always initiates full alignment,
+minibwa prefilters the read-reference pair as follows.
+
+(LATER)
+
+\subsection{Parameter setting based on read lengths}
+
+BWA-MEM is primarily developed for short reads.
+While minimap2 supports both short and long reads,
+users have to specify a preset specific for either short or long reads but not both.
+This is not ideal for mixed short and long reads.
+Minibwa adjusts several parameters based on the read length $\ell$ using the following formula:
+$$
+\theta(\ell)=\theta_l-(\theta_l-\theta_s)\cdot 2^{-\frac{\ell-\ell_{\rm min}}{\ell_{\rm mid}-\ell_{\rm min}}}
+$$
+where $\theta_l$ is the long-read value and $\theta_s$ is the short-read value.
+We hardcode $\ell_{\rm min}=100$ and $\ell_{\rm mid}=2000$.
+The length-adjusted parameter $\theta(\ell)$ reaches $(\theta_s+\theta_l)/2$ at $\ell=\ell_{\rm mid}$.
+
+\subsection{Mapping directional bisulfite sequencing reads}
+
+Like BWA-Meth, minibwa concatenates the C-to-T converted reference genome
+and the G-to-A converted reference genome and constructs one FM-index.
+This index consists of four copies of the reference genome:
+forward C-to-T converted genome, forward G-to-A genome,
+reverse G-to-A converted genome and reverse C-to-T genome.
+Given a BS-seq read pair, minibwa converts all C bases on read 1 to T
+and converts all G bases on read 2 to A.
+It finds seeds against the converted FM-index.
+A seed on read 1 is only retained if it comes from the forward C-to-T genome or the reverse G-to-A genome;
+similarly, a seed on read 2 is retained if it comes from the forward G-to-A or the reverse C-to-T genome.
+Minibwa performs base alignment and mate rescue entirely in the converted space.
+
+\section{Results}
+
+We evaluated the mapping accuracy of minibwa on simulated short and long reads and
+measured the performance on real data including WGS reads,
+Hi-C short reads and directional BS-seq reads.
+
+\subsection{Mapping accuracy on simulated data}
+
+\begin{figure*}
+\includegraphics[width=\textwidth]{fig-roc.pdf}
+\caption{Evaluating mapping accuracy on simulated data.}\label{fig:roc}
+\end{figure*}
+
+We simulated short reads using mason~\citep{fu_mi_publications962} with
+``{\tt -{}-illumina-read-length 150 -{}-illumina-prob-mismatch-scale\\2.5}''.
+We simulated long reads with Badread~\citep{Wick2019}.
+We used default option for Nanopore reads
+and option ``{\tt -{}-error\_model pacbio2021 -{}-qscore\_model pacbio2021 -{}-length 15000,3000\\-{}-identity 27,3}'' for HiFi reads.
+
+\subsection{Mapping performance on real data}
+
+\subsection{Effect on short-read variant calling}
+
+\section{Discussions}
 
 \section*{Acknowledgments}
 
