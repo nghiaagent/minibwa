@@ -13,6 +13,17 @@
 #error "Missing SSE2 or NEON intrinsics"
 #endif
 
+static inline __m128i ksw_i8x4_to_i32x4(const int8_t *x)
+{
+#if defined(__ARM_NEON)
+    return vreinterpretq_u8_s32(vmovl_s16(vget_low_s16(vmovl_s8(vcreate_s8((uint64_t)(uint32_t)*(int32_t*)x)))));
+#elif defined(__SSE4_1__)
+	return _mm_cvtepi8_epi32(_mm_cvtsi32_si128(*(int32_t*)x));
+#else
+	return _mm_setr_epi32(x[0], x[1], x[2], x[3]);
+#endif
+}
+
 void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uint8_t *target, int8_t m, const int8_t *mat,
 				   int8_t q, int8_t e, int8_t q2, int8_t e2, int w, int zdrop, int end_bonus, int flag, ksw_extz_t *ez)
 {
@@ -314,7 +325,7 @@ void ksw_extd2_sse(void *km, int qlen, const uint8_t *query, int tlen, const uin
 				for (t = st0; t < en1; t += 4) { // this implements: H[t]+=v8[t]-qe; if(H[t]>max_H) max_H=H[t],max_t=t;
 					__m128i H1, tmp, t_;
 					H1 = _mm_loadu_si128((__m128i*)&H[t]);
-					t_ = _mm_setr_epi32(v8[t], v8[t+1], v8[t+2], v8[t+3]);
+					t_ = ksw_i8x4_to_i32x4(&v8[t]);
 					H1 = _mm_add_epi32(H1, t_);
 					_mm_storeu_si128((__m128i*)&H[t], H1);
 					t_ = _mm_set1_epi32(t);
