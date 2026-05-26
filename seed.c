@@ -208,7 +208,7 @@ static void process_batch(void *km, const mb_idx_t *idx, const anchor_aux_t *aux
 	}
 }
 
-static void mb_anchor_split_meth(void *km, const l2b_t *l2b, int32_t min_len, int32_t qlen, const uint8_t *qseq0, l2b_meth_t mt, mb_anchor_v *v)
+static void mb_anchor_split_meth(void *km, const l2b_t *l2b, int32_t min_len, int32_t qlen, const uint8_t *qseq0, l2b_meth_t mt0, mb_anchor_v *v)
 {
 	int64_t i, m_a = v->n * 2, n_a = 0;
 	int32_t max_len = 0;
@@ -232,15 +232,16 @@ static void mb_anchor_split_meth(void *km, const l2b_t *l2b, int32_t min_len, in
 		int32_t rev = q->sid&1;
 		int64_t tpos = q->tpos - (ctg->off * 2 + ctg->len * rev); // NB: requiring concatenated ::tpos!!
 		int64_t ts = tpos + 1 - q->len;
-		int32_t qs = q->qpos + 1 - q->len;
-		int32_t j, j0;
-		uint8_t no_t, no_q;
+		int32_t qs = q->qpos + 1 - q->len, j, j0;
+		uint8_t t_allow, q_allow;
+		l2b_meth_t mt;
 		const uint8_t *qseq = qseq2[rev] + qs;
 		l2b_getseq(l2b, q->sid>>1, ts, ts + q->len, tseq);
-		no_t = mt == L2B_METH_C2T? 3 : 0;
-		no_q = mt == L2B_METH_C2T? 1 : 2;
+		mt = q->sid&1? l2b_meth_rev(mt0) : mt0;
+		t_allow = mt == L2B_METH_C2T? 1 : 2;
+		q_allow = mt == L2B_METH_C2T? 3 : 0;
 		for (j0 = j = 0; j <= q->len; ++j) {
-			if (j == q->len || tseq[j] == 4 || qseq[j] == 4 || (tseq[j] != qseq[j] && !(tseq[j] == no_q && qseq[j] == no_t))) {
+			if (j == q->len || tseq[j] == 4 || qseq[j] == 4 || (tseq[j] != qseq[j] && !(tseq[j] == t_allow && qseq[j] == q_allow))) {
 				if (j - j0 >= min_len) {
 					Kgrow(km, mb_anchor_t, a, n_a, m_a);
 					p = &a[n_a++];
