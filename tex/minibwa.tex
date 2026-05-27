@@ -422,11 +422,15 @@ we ended up with a different seeding strategy in BWA-MEM.
 Minibwa adapted the minimap2 chaining algorithm~\citep{Li:2018ab} for variable-length seeds.
 It retains up to 50 best chains for a short read
 and uses the minimap2 algorithm to close gaps between seeds or extends the first or the last seeds.
-When an ungapped alignment contains many mismatches, minibwa falls back to SIMD-based dynamic programming~\citep{Suzuki:2018aa} with dual-gap penalty.
+Minibwa first tries ungapped alignment.
+If that alignment contains many mismatches, minibwa falls back to SIMD-based dynamic programming (DP) with dual-gap penalty~\citep{Suzuki:2018aa}.
+For WGS short reads, the DP step is the performance bottleneck, taking $\sim$35\% of total CPU time.
+Minibwa uses SSE4.1 intrinsics on x86 CPUs and NEON intrinsics on ARM CPUs.
+We experimented an AVX2-based implementation but did not see clear improvement.
 
 In comparison, BWA-MEM uses a heuristic chaining algorithm that is less accurate and does not work well for long reads.
-It only performs extension alignment from each seed but does not attempt to close gaps between seeds.
-BWA-MEM uses the standard affine gap penalty and usually fills a smaller portion of the dynamic programming matrix in each extension.
+It performs extension alignment from each seed but does not attempt to close gaps between seeds.
+BWA-MEM uses the standard affine gap penalty and usually fills a smaller portion of the DP matrix given identical input sequences.
 It is less tolerant with long gaps.
 On the other hand, BWA-MEM tends to test more chains and still pays more effort overall for reads in centromeres or acrocentric short arms.
 
@@ -573,9 +577,9 @@ We aligned HG002 short reads~\citep{Baid2020.12.11.422022} to GRCh38, called sma
 and compared the calls to the GIAB Q100 ground truth v1.1~\citep{Hansen2025.09.21.677443} with RTG vcfeval v3.13~\citep{Cleary023754}.
 Minibwa closely matched or slightly improved on BWA-MEM (Table~\ref{tab:var}):
 528 fewer SNP FNs, 41 fewer SNP FPs, 1,104 fewer indel FNs, and 90 more indel FPs.
-We inspected indels only missed by BWA-MEM and found minibwa tends to align more reads with $>$10 bp indels,
+We inspected BWA-MEM-specific indel FNs and found minibwa tends to align more reads with $>$10 bp indels,
 consistent with the algorithmic analysis (Section~\ref{sec:align}).
-Although strobealign is faster than minibwa (Fig.~\ref{fig:perf}), it does not compete with minibwa or BWA-MEM on small variant calling.
+Although strobealign is 10\% faster than minibwa (Fig.~\ref{fig:perf}), it does not compete with minibwa or BWA-MEM on small variant calling.
 
 \begin{table}[b]
 \caption{Short-read variant calling accuracy with DeepVariant}\label{tab:var}
