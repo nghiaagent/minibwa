@@ -515,6 +515,7 @@ void mb_set_mapq(void *km, int32_t qlen, int n_regs, mb_hit_t *regs, int min_cha
 			}
 			mapq -= (int)(4.343f * log(r->n_sub + 1) + .499f);
 			mapq = mapq > 0? mapq : 0;
+			if (r->seed_ratio < 50) mapq *= (double)r->seed_ratio * r->seed_ratio / 2500.0;
 			r->mapq = mapq < 60? mapq : 60;
 			if (r->p && r->p->dp_max > r->p->dp_max2 && r->mapq == 0) r->mapq = 1;
 		} else r->mapq = 0;
@@ -556,7 +557,7 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 	int32_t i, n_hit, hi_cov, is_sr;
 	int32_t sub_diff = opt->a + opt->b > opt->q + opt->e? opt->a + opt->b : opt->q + opt->e;
 	uint64_t *w;
-	double chn_pen_gap;
+	double chn_pen_gap, seed_ratio;
 	uint8_t *seq;
 	mb_anchor_v v = {0,0,0};
 	mb_anchor_t *a;
@@ -580,7 +581,7 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 	// collect anchors
 	chn_pen_gap = opt->chain_gap_scale * .01 * opt->min_len;
 	if (kom_dbg_flag & MB_DBG_SEED) mb_dbg_seed(u->n, u->a, qname);
-	mb_anchor(b->km, idx, u, opt->min_len, qlen, seq, mt, opt->max_occ, &v);
+	seed_ratio = mb_anchor(b->km, idx, u, opt->min_len, qlen, seq, mt, opt->max_occ, &v);
 	kfree(b->km, u->a); // no longer needed
 	u->n = 0, u->a = 0;
 
@@ -622,7 +623,11 @@ mb_hit_t *mb_map_sai(const mb_opt_t *opt, const mb_idx_t *idx, int64_t qlen, con
 		mb_select_sub(b->km, opt->pri_ratio, opt->min_len * 2, opt->best_n, &n_hit, hit);
 		mb_set_sam_pri(n_hit, hit, !!(opt->flag & MB_F_PRIMARY5));
 	}
-	for (i = 0; i < n_hit; ++i) hit[i].frac_high = (int32_t)(255. * hi_cov / qlen);
+	for (i = 0; i < n_hit; ++i) {
+		hit[i].frac_high = (int32_t)(255. * hi_cov / qlen);
+		hit[i].seed_ratio = (int32_t)(255. * seed_ratio + .499);
+		if (hit[i].seed_ratio == 0) hit[i].seed_ratio = 1;
+	}
 	mb_set_mapq(b->km, qlen, n_hit, hit, opt->min_chain_score, opt->a, is_sr, opt->max_sr_len);
 
 	// clean up

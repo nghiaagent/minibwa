@@ -355,7 +355,7 @@ static const mb_hit_t *mb_matesw_core(void *km, const mb_opt_t *opt, const l2b_t
 				if (ts2 < ts) ts2 = ts;
 				if (te2 > te) te2 = te;
 			}
-			if (max_ug >= 10 || max_ug >= n_kmer * 0.33 || (max_ug >= 3 && n_kmer < .1 * (len - 6))) // enough k-mers or low-complexity
+			if (max_ug >= 10 || max_ug >= n_kmer * 0.33)
 				mb_matesw_align(km, opt, len, seq[is_rev], te2 - ts2, &ref[ts2 - ts], &ht, min_sc, mt, ez);
 			if (ht.p) { // a good hit found
 				ht.tid = h0->tid;
@@ -463,7 +463,12 @@ void mb_pair(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], 
 	int32_t r, i, dp_max_se[2], score_se, do_matesw, is_meth = !!(opt->flag & MB_F_METH);
 	mb_pairaux_t paux;
 	mb_hit_t *h[2];
+	int32_t seed_ratio[2], min_seed_ratio;
 
+	if (n_hit[0] == 0 && n_hit[1] == 0) return;
+	seed_ratio[0] = n_hit[0] > 0? hit[0][0].seed_ratio : 255;
+	seed_ratio[1] = n_hit[1] > 0? hit[1][0].seed_ratio : 255;
+	min_seed_ratio = seed_ratio[0] < seed_ratio[1]? seed_ratio[0] : seed_ratio[1];
 	mb_pair_hits(km, opt, l2b, n_hit, hit, pes, &paux);
 	do_matesw = paux.n_pp > 0 && paux.score == paux.sub_sc? 0 : 1; // skip mate rescue if we see two equally best pairs
 	if (do_matesw && opt->max_rescue > 0) {
@@ -503,6 +508,7 @@ void mb_pair(void *km, const mb_opt_t *opt, const l2b_t *l2b, int32_t n_hit[2], 
 			score2 = score_se - opt->pen_unpair * opt->a;
 		mapq_pe = (int)(6.02 * identity * identity * (paux.score - score2) / opt->a - 4.343 * log(paux.n_sub + 1) + .499);
 		mapq_pe = (int)(mapq_pe * (1. - .5 * (h[0]->frac_high / 255. + h[1]->frac_high / 255.)) + .499);
+		if (min_seed_ratio < 50) mapq_pe *= (double)min_seed_ratio * min_seed_ratio / 2500.0;
 		if (mapq_pe > 60) mapq_pe = 60;
 		if (mapq_pe == 0 && paux.score > score2) mapq_pe = 1;
 		for (r = 0; r < 2; ++r) {

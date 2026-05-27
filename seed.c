@@ -264,17 +264,18 @@ static void mb_anchor_split_meth(void *km, const l2b_t *l2b, int32_t min_len, in
 /* Converting seed intervals to anchors. This function batches small SA
  * intervals and calls mb_bwt_sa_batch() in process_batch(). With prefetch, the
  * strategy noticeably improves the performance. */
-void mb_anchor(void *km, const mb_idx_t *idx, mb_sai_v *u, int32_t min_len, int32_t qlen, const uint8_t *qseq, l2b_meth_t mt, int32_t max_occ, mb_anchor_v *v)
+double mb_anchor(void *km, const mb_idx_t *idx, mb_sai_v *u, int32_t min_len, int32_t qlen, const uint8_t *qseq, l2b_meth_t mt, int32_t max_occ, mb_anchor_v *v)
 {
 	const int batch_size = 20;
 	int32_t n_aux, m, m_a;
 	int64_t i, i0, j, k;
 	uint64_t *a;
+	double seed_ratio = 1.0;
 	sa_aux_t *b;
 	anchor_aux_t *aux;
 
 	v->n = 0;
-	if (u->n == 0) return; // no anchors
+	if (u->n == 0) return seed_ratio; // no anchors
 	mb_seed_sort_dedup(u);
 
 	for (i = 0, k = 0; i < u->n; ++i) // pre-calculate the size of v->a
@@ -318,8 +319,13 @@ void mb_anchor(void *km, const mb_idx_t *idx, mb_sai_v *u, int32_t min_len, int3
 	kfree(km, a);
 	kfree(km, aux);
 
-	if (mt != L2B_METH_NONE && v->n > 0)
+	if (mt != L2B_METH_NONE && v->n > 0) {
+		int64_t t0, t1;
+		for (i = 0, t0 = 0; i < v->n; ++i) t0 += v->a[i].len;
 		mb_anchor_split_meth(km, idx->l2b, min_len, qlen, qseq, mt, v);
+		for (i = 0, t1 = 0; i < v->n; ++i) t1 += v->a[i].len;
+		seed_ratio = (double)t1 / t0;
+	}
 
 	radix_sort_mb_anchor(v->a, v->a + v->n);
 	for (i = 0; i < v->n; ++i) { // adjust mb_anchor_t::tpos
@@ -328,6 +334,7 @@ void mb_anchor(void *km, const mb_idx_t *idx, mb_sai_v *u, int32_t min_len, int3
 		q->tpos -= ctg->off * 2 + ctg->len * (q->sid&1);
 	}
 	mb_anchor_dedup(v);
+	return seed_ratio;
 }
 
 void mb_anchor_sort(const l2b_t *l2b, int64_t n_a, mb_anchor_t *a)
