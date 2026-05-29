@@ -23,7 +23,7 @@ Similarity to bwa-mem:
  * Almost the same data structure for FM-index. Nonetheless, at the API level,
    minibwa uses half-closed-half-open suffix array (SA) intervals, similar to
    ropebwt3, but bwa-mem uses closed intervals. Minibwa also increases the SA
-   sampling rate from 1/32 to 1/16. This *might* be changed back.
+   sampling rate from 1/32 to 1/16.
 
 Similarity to minimap2:
 
@@ -68,6 +68,9 @@ Similarity to minimap2:
  * When retrieving SA values, minibwa also batches multiple BWT positions
    (`mb_bwt_sa_batch`). Bwa-mem2 uses the same trick.
 
+ * Minibwa slightly speeds up SSE-based alignment originated from minimap2. The
+   changes will be merged back to minimap2 later.
+
  * During mate rescue, minibwa uses a small 7-mer hash table to filter out poor
    alignment without full Smith-Waterman (`mb_ungap`). The algorithm is
    inspired by the Hough transform for line finding.
@@ -75,3 +78,5 @@ Similarity to minimap2:
  * Minibwa reduces alignments in highly repetitive regions because short reads
    in these regions cannot be aligned well anyway. On simulated data, the
    accuracy remains similar.
+
+ * Minibwa natively aligns directional BS-seq reads.
