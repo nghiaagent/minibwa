@@ -9,6 +9,7 @@
 
 int main_index(int argc, char *argv[]);
 int main_map(int argc, char *argv[]);
+int main_mem(int argc, char *argv[]);
 
 int main_fa2bit(int argc, char *argv[]);
 int main_raw2bwt(int argc, char *argv[]);
@@ -27,7 +28,8 @@ static int usage(FILE *fp, int is_long)
 	if (is_long) {
 		fprintf(fp, "  General:\n");
 		fprintf(fp, "    index      index reference FASTA\n");
-		fprintf(fp, "    map        read alignment\n");
+		fprintf(fp, "    map        read alignment (recommended over mem)\n");
+		fprintf(fp, "    mem        bwa-mem compatible CLI\n");
 		fprintf(fp, "    version    print the version number\n");
 		fprintf(fp, "  Separate indexing routines:\n");
 		fprintf(fp, "    fa2bit     convert FASTA to the long-2bit format\n");
@@ -43,7 +45,8 @@ static int usage(FILE *fp, int is_long)
 		fprintf(fp, "    --help     print this help message\n");
 	} else {
 		fprintf(fp, "  index      index reference FASTA\n");
-		fprintf(fp, "  map        read alignment\n");
+		fprintf(fp, "  map        read alignment (recommended over mem)\n");
+		fprintf(fp, "  mem        bwa-mem compatible CLI\n");
 		fprintf(fp, "  version    print the version number\n");
 	}
 	return fp == stdout? 0 : 1;
@@ -55,7 +58,8 @@ int main(int argc, char *argv[])
 	kom_realtime();
 	if (argc == 1) return usage(stdout, 0);
 	else if (strcmp(argv[1], "index") == 0) ret = main_index(argc-1, argv+1);
-	else if (strcmp(argv[1], "map") == 0 || strcmp(argv[1], "mem") == 0) ret = main_map(argc-1, argv+1);
+	else if (strcmp(argv[1], "map") == 0) ret = main_map(argc-1, argv+1);
+	else if (strcmp(argv[1], "mem") == 0) ret = main_mem(argc-1, argv+1);
 	else if (strcmp(argv[1], "fa2bit") == 0) ret = main_fa2bit(argc-1, argv+1);
 	else if (strcmp(argv[1], "genraw") == 0) ret = main_genraw(argc-1, argv+1);
 	else if (strcmp(argv[1], "raw2bwt") == 0) ret = main_raw2bwt(argc-1, argv+1);
