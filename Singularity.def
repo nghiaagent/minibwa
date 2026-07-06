@@ -38,4 +38,11 @@ From: debian:stable-slim
     exec minibwa "$@"
 
 %test
+    # 1. Run version check
     minibwa version
+
+    # 2. Run the index pipeline using the included test data
+    minibwa index /src/minibwa/test/chrM-human.fa.gz /tmp/chrM-human
+
+    # 3. Run the mapping pipeline and output to SAM
+    minibwa map /tmp/chrM-human /src/minibwa/test/chrM-read_1.fa.gz /src/minibwa/test/chrM-read_2.fa.gz > /tmp/aln.sam
