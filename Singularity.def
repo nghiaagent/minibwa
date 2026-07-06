@@ -1,0 +1,41 @@
+Bootstrap: docker
+From: debian:stable-slim
+
+%labels
+    Maintainer "lh3"
+    Software "minibwa"
+    Version "0.3"
+    Description "Minibwa aligns short reads against a reference genome, succeeding bwa-mem."
+    Software.Version "0.3"
+    License "MIT"
+
+%files
+    . /src/minibwa
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends \
+        gcc \
+        make \
+        libc-dev \
+        zlib1g-dev \
+        ca-certificates \
+        && rm -rf /var/lib/apt/lists/*
+
+    cd /src/minibwa
+    make clean && make
+    cp minibwa /usr/local/bin/minibwa
+    make clean
+
+    # Remove build tools to keep the image minimal
+    apt-get purge -y gcc make libc-dev zlib1g-dev
+    apt-get autoremove -y
+    apt-get install -y --no-install-recommends zlib1g libgomp1 && rm -rf /var/lib/apt/lists/*
+
+%environment
+    export PATH=/usr/local/bin:$PATH
+
+%runscript
+    exec minibwa "$@"
+
+%test
+    minibwa version
