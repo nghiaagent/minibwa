@@ -3,6 +3,52 @@
 [![Homebrew](https://img.shields.io/homebrew/v/minibwa)](https://formulae.brew.sh/formula/minibwa)
 [![preprint](https://img.shields.io/badge/arXiv-2606.15357-blue)](https://arxiv.org/abs/2606.15357)
 
+## This fork of minibwa can be built as Docker and Singularity images.
+
+### Build instructions
+
+Make sure Docker is available on your machine. Clone and cd into the repo:
+
+```sh
+git clone https://github.com/nghiaagent/minibwa
+cd minibwa
+```
+
+Build the Docker image:
+
+```sh
+docker build -t minibwa:0.3 .
+```
+
+Convert the Docker image to Singularity:
+
+```sh
+# 1. Save the Docker image to a tarball archive
+docker save -o minibwa.tar minibwa:0.3
+
+# 2. Run the Singularity build utility inside a Docker container to convert the archive to a SIF file
+docker run --rm -v $(pwd):$(pwd) -w $(pwd) quay.io/singularity/singularity:v3.8.3 build minibwa.sif docker-archive://minibwa.tar
+
+# 3. Clean up the temporary archive
+rm minibwa.tar
+```
+
+Verify container via `minibwa version`:
+
+```sh
+singularity run minibwa.sif version
+```
+
+Verify container via included tests:
+
+```sh
+mkdir tmp
+singularity exec minibwa.sif minibwa index /src/minibwa/test/chrM-human.fa.gz /tmp/chrM-human
+singularity exec minibwa.sif minibwa map /tmp/chrM-human /src/minibwa/test/chrM-read_1.fa.gz /src/minibwa/test/chrM-read_2.fa.gz > /tmp/aln_test.sam
+```
+
+# Original README
+
 ## Getting Started
 ```sh
 git clone https://github.com/lh3/minibwa
