@@ -23,8 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the compiled binary from builder
+# Copy the compiled binary and test data from builder
 COPY --from=builder /src/minibwa/minibwa /usr/local/bin/minibwa
+COPY --from=builder /src/minibwa/test /usr/local/share/minibwa/test
 
 # Set BioContainers labels
 LABEL base.image="debian:stable-slim" \
