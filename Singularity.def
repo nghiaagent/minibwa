@@ -18,6 +18,8 @@ From: debian:stable-slim
         make \
         libc-dev \
         zlib1g-dev \
+        libgomp1 \
+        zlib1g \
         ca-certificates \
         && rm -rf /var/lib/apt/lists/*
 
@@ -29,7 +31,6 @@ From: debian:stable-slim
     # Remove build tools to keep the image minimal
     apt-get purge -y gcc make libc-dev zlib1g-dev
     apt-get autoremove -y
-    apt-get install -y --no-install-recommends zlib1g libgomp1 && rm -rf /var/lib/apt/lists/*
 
 %environment
     export PATH=/usr/local/bin:$PATH
